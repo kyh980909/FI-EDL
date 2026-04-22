@@ -12,8 +12,8 @@ artifacts/
 lightning_logs/
 multirun/
 
-# Data
-data/
+# Data (root-level only; not src/data/ which is source code)
+/data/
 
 # OS / editor / local tooling
 .DS_Store
