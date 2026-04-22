@@ -1,0 +1,10 @@
+# @package _global_
+
+experiment:
+  name: edl_l01
+  method_variant: edl_fixed_l01
+
+loss:
+  name: edl_fixed
+  lambda_value: 0.1
+  anneal_epochs: 10

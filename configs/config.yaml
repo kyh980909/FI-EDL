@@ -1,0 +1,51 @@
+# Base configuration. Hydra resolves the following lookup order:
+#   1. `defaults` block pulls experiment + dataset + backbone groups.
+#   2. CLI overrides (e.g. `seed=1`) apply last.
+defaults:
+  - _self_
+  - experiment: fi_edl
+  - dataset: cifar10
+  - backbone: resnet18
+
+seed: 0
+checkpoint: ""
+
+model:
+  head: edl
+  num_classes: 10
+  pretrained: false
+  evidence_fn: softplus
+
+score:
+  name: vacuity
+
+eval:
+  scores: [maxp, alpha0, vacuity]
+  confidence_scores: [maxp, maxalpha]
+  calibration: none
+  temperature: 1.0
+
+optimizer:
+  name: adam
+  lr: 0.001
+  momentum: 0.9
+  weight_decay: 0.0
+
+scheduler:
+  name: none
+  warmup_epochs: 0
+
+trainer:
+  max_epochs: 100
+  accelerator: auto
+  devices: 1
+  precision: 32-true
+  log_every_n_steps: 50
+  early_stopping: false
+  early_stopping_monitor: val/loss
+  early_stopping_mode: min
+  early_stopping_patience: 20
+  deterministic: true
+
+logging:
+  local_dir: runs

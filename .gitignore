@@ -1,0 +1,23 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.python-version.local
+
+# Hydra / Lightning outputs
+outputs/
+runs/
+results/
+artifacts/
+lightning_logs/
+multirun/
+
+# Data
+data/
+
+# OS / editor / local tooling
+.DS_Store
+.idea/
+.vscode/
+.omc/
+.codex

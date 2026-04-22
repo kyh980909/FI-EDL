@@ -1,0 +1,15 @@
+# @package _global_
+# I-EDL reference baseline (Deng et al., 2023). Fisher-weighted MSE + variance +
+# log-det Fisher regularizer, with linear KL annealing when lambda_kl < 0.
+
+experiment:
+  name: i_edl
+  method_variant: i_edl
+
+loss:
+  name: i_edl
+  lambda_kl: -1.0
+  lambda_logdet: 0.05
+  fisher_c: 0.05
+  kl_anneal_epochs: 10
+  anneal_epochs: 10

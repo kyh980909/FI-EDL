@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fi-edl"
+version = "0.1.0"
+description = "FI-EDL (Fisher Information EDL) paper reproduction package"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+  "torch>=2.1",
+  "torchvision>=0.16",
+  "pytorch-lightning>=2.2",
+  "hydra-core>=1.3",
+  "omegaconf>=2.3",
+  "scikit-learn>=1.4",
+  "numpy>=1.26",
+  "matplotlib>=3.8",
+  "pandas>=2.2",
+  "PyYAML>=6.0",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+]
+
+[tool.uv]
+package = true
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu128", marker = "sys_platform == 'win32'" },
+]
+torchvision = [
+  { index = "pytorch-cu128", marker = "sys_platform == 'win32'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

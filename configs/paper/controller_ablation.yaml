@@ -1,0 +1,13 @@
+# FI-EDL controller ablation on CIFAR-10.
+#   info_type ∈ {fisher, alpha0, target_alpha}
+#   gate_type ∈ {exp, constant}
+# Each row is a fresh run; the build_table script groups by method_variant.
+methods: [fi_edl]
+seeds: [0, 1, 2]
+run_eval: true
+overrides:
+  - dataset=cifar10
+  - backbone=resnet18
+  - trainer.max_epochs=100
+  - data.batch_size=64
+  - optimizer.lr=0.0005
