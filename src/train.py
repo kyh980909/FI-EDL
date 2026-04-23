@@ -79,13 +79,27 @@ def _resume_checkpoint_path(run_dir: Path) -> str | None:
     return None
 
 
+def _wandb_enabled(cfg: DictConfig) -> bool:
+    if bool(OmegaConf.select(cfg, "logging.wandb.enabled", default=False)):
+        return True
+    # Convenience env fallbacks so users can enable wandb without Hydra overrides.
+    flag = os.environ.get("FIEDL_WANDB", "").strip().lower()
+    if flag in {"1", "true", "yes", "on"}:
+        return True
+    if os.environ.get("WANDB_PROJECT"):
+        return True
+    return False
+
+
 def _build_loggers(cfg: DictConfig, run_name: str, run_dir):
     loggers = [CSVLogger(save_dir=cfg.logging.local_dir, name=cfg.experiment.name)]
     wandb_cfg = OmegaConf.select(cfg, "logging.wandb", default=None)
-    if wandb_cfg is None or not bool(OmegaConf.select(wandb_cfg, "enabled", default=False)):
+    if wandb_cfg is None or not _wandb_enabled(cfg):
+        print("[WANDB] disabled (pass logging.wandb.enabled=true, or set FIEDL_WANDB=1)")
         return loggers
     mode = str(OmegaConf.select(wandb_cfg, "mode", default="online"))
     if mode == "disabled":
+        print("[WANDB] disabled via logging.wandb.mode=disabled")
         return loggers
     try:
         from pytorch_lightning.loggers import WandbLogger
@@ -94,11 +108,16 @@ def _build_loggers(cfg: DictConfig, run_name: str, run_dir):
             "logging.wandb.enabled=true requires `wandb` installed. "
             "Run `uv sync --dev` after pulling the latest pyproject.toml."
         ) from exc
+    project = os.environ.get("WANDB_PROJECT") or str(
+        OmegaConf.select(wandb_cfg, "project", default="fi-edl")
+    )
+    entity = os.environ.get("WANDB_ENTITY") or OmegaConf.select(wandb_cfg, "entity", default=None)
     tags = list(OmegaConf.select(wandb_cfg, "tags", default=[]) or [])
+    print(f"[WANDB] enabled  project={project}  entity={entity}  mode={mode}  run={run_name}")
     loggers.append(
         WandbLogger(
-            project=str(OmegaConf.select(wandb_cfg, "project", default="fi-edl")),
-            entity=OmegaConf.select(wandb_cfg, "entity", default=None),
+            project=project,
+            entity=entity,
             name=run_name,
             save_dir=str(run_dir),
             tags=tags,
