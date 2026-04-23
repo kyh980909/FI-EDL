@@ -99,7 +99,7 @@ def run_eval(cfg: DictConfig) -> None:
     if not cfg.checkpoint:
         raise ValueError("checkpoint must be provided for eval")
 
-    collector = LocalCollector(cfg)
+    collector = LocalCollector(cfg, kind="eval")
     datamodule = FIEDLDataModule(cfg)
     datamodule.setup()
 

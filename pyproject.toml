@@ -20,9 +20,15 @@ dependencies = [
   "PyYAML>=6.0",
 ]
 
+[project.optional-dependencies]
+wandb = [
+  "wandb>=0.17",
+]
+
 [dependency-groups]
 dev = [
   "pytest>=8.0",
+  "wandb>=0.17",
 ]
 
 [tool.uv]

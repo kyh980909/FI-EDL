@@ -26,6 +26,37 @@ from src.registry.validators import validate_registry_bindings
 from src.reporting.collector import LocalCollector
 
 
+def _build_loggers(cfg: DictConfig, run_name: str, run_dir):
+    loggers = [CSVLogger(save_dir=cfg.logging.local_dir, name=cfg.experiment.name)]
+    wandb_cfg = OmegaConf.select(cfg, "logging.wandb", default=None)
+    if wandb_cfg is None or not bool(OmegaConf.select(wandb_cfg, "enabled", default=False)):
+        return loggers
+    mode = str(OmegaConf.select(wandb_cfg, "mode", default="online"))
+    if mode == "disabled":
+        return loggers
+    try:
+        from pytorch_lightning.loggers import WandbLogger
+    except ImportError as exc:
+        raise RuntimeError(
+            "logging.wandb.enabled=true requires `wandb` installed. "
+            "Run `uv sync --dev` after pulling the latest pyproject.toml."
+        ) from exc
+    tags = list(OmegaConf.select(wandb_cfg, "tags", default=[]) or [])
+    loggers.append(
+        WandbLogger(
+            project=str(OmegaConf.select(wandb_cfg, "project", default="fi-edl")),
+            entity=OmegaConf.select(wandb_cfg, "entity", default=None),
+            name=run_name,
+            save_dir=str(run_dir),
+            tags=tags,
+            mode=mode,
+            log_model=bool(OmegaConf.select(wandb_cfg, "log_model", default=False)),
+            config=OmegaConf.to_container(cfg, resolve=True),
+        )
+    )
+    return loggers
+
+
 def _apply_determinism(cfg: DictConfig) -> None:
     if not bool(OmegaConf.select(cfg, "trainer.deterministic", default=True)):
         return
@@ -55,7 +86,7 @@ def run_train(cfg: DictConfig) -> None:
     _enable_checkpoint_safe_globals()
     validate_registry_bindings(cfg)
 
-    collector = LocalCollector(cfg)
+    collector = LocalCollector(cfg, kind="train")
     datamodule = FIEDLDataModule(cfg)
     model = FIEDLLightningModule(cfg)
 
@@ -89,7 +120,7 @@ def run_train(cfg: DictConfig) -> None:
         log_every_n_steps=int(cfg.trainer.log_every_n_steps),
         limit_train_batches=OmegaConf.select(cfg, "trainer.limit_train_batches", default=1.0),
         limit_val_batches=OmegaConf.select(cfg, "trainer.limit_val_batches", default=1.0),
-        logger=CSVLogger(save_dir=cfg.logging.local_dir, name=cfg.experiment.name),
+        logger=_build_loggers(cfg, run_name=collector.run_name, run_dir=collector.run_dir),
         callbacks=callbacks,
         deterministic=bool(OmegaConf.select(cfg, "trainer.deterministic", default=True)),
     )

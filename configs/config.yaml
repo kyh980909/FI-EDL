@@ -49,3 +49,10 @@ trainer:
 
 logging:
   local_dir: runs
+  wandb:
+    enabled: false
+    project: fi-edl
+    entity: null
+    tags: []
+    mode: online  # online | offline | disabled
+    log_model: false
