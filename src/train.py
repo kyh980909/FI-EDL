@@ -23,7 +23,60 @@ from src.callbacks.nan_detector import NaNStopCallback
 from src.data.datamodule import FIEDLDataModule
 from src.models.lit_module import FIEDLLightningModule
 from src.registry.validators import validate_registry_bindings
-from src.reporting.collector import LocalCollector
+from src.reporting.collector import LocalCollector, _slug
+
+
+def _find_resumable_run(cfg: DictConfig) -> Path | None:
+    """Locate an interrupted train run for this (method, seed, dataset, backbone, variant).
+
+    Criteria: a `train_*_<dataset>_<backbone>[_<variant>]/` directory that
+    contains `checkpoints/last.ckpt` (or `checkpoints/best.ckpt` as a fallback)
+    but lacks `summary.json` — i.e., training started but did not finish.
+    The newest matching directory wins.
+    """
+    root = Path(cfg.logging.local_dir) / cfg.experiment.name / f"seed_{cfg.seed}"
+    if not root.exists():
+        return None
+
+    dataset = _slug(cfg.data.id)
+    backbone = _slug(cfg.model.backbone)
+    method = str(cfg.experiment.name)
+    variant = OmegaConf.select(cfg, "experiment.method_variant", default="")
+    variant_slug = _slug(variant) if variant and str(variant) != method else ""
+
+    expected_suffix = f"_{dataset}_{backbone}"
+    if variant_slug:
+        expected_suffix += f"_{variant_slug}"
+
+    candidates = []
+    for child in root.iterdir():
+        if not child.is_dir() or not child.name.startswith("train_"):
+            continue
+        if not child.name.endswith(expected_suffix):
+            continue
+        if (child / "summary.json").exists():
+            continue
+        last = child / "checkpoints" / "last.ckpt"
+        best = child / "checkpoints" / "best.ckpt"
+        ckpt = last if last.exists() else (best if best.exists() else None)
+        if ckpt is None:
+            continue
+        candidates.append((child.stat().st_mtime, child, ckpt))
+
+    if not candidates:
+        return None
+    candidates.sort(reverse=True)
+    return candidates[0][1]
+
+
+def _resume_checkpoint_path(run_dir: Path) -> str | None:
+    last = run_dir / "checkpoints" / "last.ckpt"
+    if last.exists():
+        return str(last)
+    best = run_dir / "checkpoints" / "best.ckpt"
+    if best.exists():
+        return str(best)
+    return None
 
 
 def _build_loggers(cfg: DictConfig, run_name: str, run_dir):
@@ -86,7 +139,11 @@ def run_train(cfg: DictConfig) -> None:
     _enable_checkpoint_safe_globals()
     validate_registry_bindings(cfg)
 
-    collector = LocalCollector(cfg, kind="train")
+    resume_dir = _find_resumable_run(cfg)
+    collector = LocalCollector(cfg, kind="train", resume_dir=resume_dir)
+    resume_ckpt = _resume_checkpoint_path(collector.run_dir) if resume_dir is not None else None
+    if resume_ckpt:
+        print(f"[RESUME] {cfg.experiment.name} seed={cfg.seed} from {resume_ckpt}")
     datamodule = FIEDLDataModule(cfg)
     model = FIEDLLightningModule(cfg)
 
@@ -95,6 +152,7 @@ def run_train(cfg: DictConfig) -> None:
     ckpt = ModelCheckpoint(
         dirpath=str(Path(collector.run_dir) / "checkpoints"),
         save_top_k=1,
+        save_last=True,
         monitor=monitor,
         mode=mode,
         filename="best",
@@ -125,7 +183,7 @@ def run_train(cfg: DictConfig) -> None:
         deterministic=bool(OmegaConf.select(cfg, "trainer.deterministic", default=True)),
     )
 
-    trainer.fit(model, datamodule=datamodule)
+    trainer.fit(model, datamodule=datamodule, ckpt_path=resume_ckpt)
     test_metrics = trainer.test(model, datamodule=datamodule, ckpt_path="best")
 
     metrics = test_metrics[0] if test_metrics else {}

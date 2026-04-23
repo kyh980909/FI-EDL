@@ -46,21 +46,46 @@ def build_run_name(cfg, kind: str) -> str:
 
 
 class LocalCollector:
-    def __init__(self, cfg, kind: str = "train") -> None:
+    def __init__(self, cfg, kind: str = "train", resume_dir: Path | None = None) -> None:
         method = cfg.experiment.name
         seed = cfg.seed
-        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
         self.kind = _slug(kind)
         self.run_name = build_run_name(cfg, kind=self.kind)
-        dir_name = f"{self.kind}_{ts}_{_slug(cfg.data.id)}_{_slug(cfg.model.backbone)}"
-        variant = OmegaConf.select(cfg, "experiment.method_variant", default="")
-        if variant and str(variant) != str(method):
-            dir_name = f"{dir_name}_{_slug(variant)}"
-        self.run_dir = Path(cfg.logging.local_dir) / method / f"seed_{seed}" / dir_name
+        self.resumed = resume_dir is not None
+
+        if resume_dir is not None:
+            self.run_dir = Path(resume_dir)
+        else:
+            ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+            dir_name = f"{self.kind}_{ts}_{_slug(cfg.data.id)}_{_slug(cfg.model.backbone)}"
+            variant = OmegaConf.select(cfg, "experiment.method_variant", default="")
+            if variant and str(variant) != str(method):
+                dir_name = f"{dir_name}_{_slug(variant)}"
+            self.run_dir = Path(cfg.logging.local_dir) / method / f"seed_{seed}" / dir_name
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.metrics_path = self.run_dir / "metrics.jsonl"
 
         resolved = OmegaConf.to_container(cfg, resolve=True)
+        cfg_bytes = json.dumps(resolved, sort_keys=True).encode("utf-8")
+        self.config_hash = hashlib.sha256(cfg_bytes).hexdigest()[:12]
+
+        if self.resumed:
+            # Keep original config_resolved.yaml / env.json intact; record the
+            # resume event in a sidecar log so runs can be audited.
+            resume_log = self.run_dir / "resume_log.jsonl"
+            with resume_log.open("a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "resumed_at_utc": datetime.now(timezone.utc).isoformat(),
+                            "kind": self.kind,
+                            "config_hash": self.config_hash,
+                        }
+                    )
+                    + "\n"
+                )
+            return
+
         (self.run_dir / "config_resolved.yaml").write_text(
             yaml.safe_dump(resolved, sort_keys=False), encoding="utf-8"
         )
@@ -74,8 +99,6 @@ class LocalCollector:
             ),
             encoding="utf-8",
         )
-        cfg_bytes = json.dumps(resolved, sort_keys=True).encode("utf-8")
-        self.config_hash = hashlib.sha256(cfg_bytes).hexdigest()[:12]
 
     def append_metric(
         self,
