@@ -14,12 +14,14 @@ LOSS_ALLOWED_KEYS = {
     "edl_fixed": {"name", "lambda_value", "anneal_epochs"},
     "fi_edl": {"name", "beta", "gamma", "info_type", "gate_type", "detach_weight"},
     "i_edl": {"name", "lambda_kl", "lambda_logdet", "fisher_c", "kl_anneal_epochs", "anneal_epochs"},
+    "r_edl": {"name", "lambda_prior"},
 }
 
 LOSS_REQUIRED_KEYS = {
     "edl_fixed": {"name", "lambda_value", "anneal_epochs"},
     "fi_edl": {"name", "beta", "gamma"},
     "i_edl": {"name", "lambda_kl", "lambda_logdet", "fisher_c", "kl_anneal_epochs"},
+    "r_edl": {"name", "lambda_prior"},
 }
 
 
