@@ -1,0 +1,11 @@
+# @package _global_
+# R-EDL baseline (Chen et al., ICLR 2024).
+#   alpha_redl = evidence + lambda_prior, KL regularizer disabled.
+
+experiment:
+  name: r_edl
+  method_variant: r_edl
+
+loss:
+  name: r_edl
+  lambda_prior: 0.1

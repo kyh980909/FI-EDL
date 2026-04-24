@@ -53,6 +53,8 @@ def _loss_kwargs(cfg) -> Dict[str, Any]:
             "kl_anneal_epochs": cfg.loss.kl_anneal_epochs,
             "lambda_logdet": cfg.loss.lambda_logdet,
         }
+    if loss_name == "r_edl":
+        return {"lambda_prior": cfg.loss.lambda_prior}
     raise ValueError(f"Unsupported loss.name: {loss_name}")
 
 

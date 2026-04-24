@@ -1,0 +1,8 @@
+# Same-pipeline R-EDL baseline on MNIST (Chen et al., ICLR 2024).
+# Matches main_mnist hyperparameters; only the loss differs.
+methods: [r_edl]
+seeds: [0, 1, 2, 3, 4]
+run_eval: true
+overrides:
+  - dataset=mnist
+  - backbone=convnet
