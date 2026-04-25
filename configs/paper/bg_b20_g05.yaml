@@ -1,0 +1,15 @@
+# beta=2.0, gamma=0.5: cell of the 3x3 sensitivity heatmap (Table 7).
+# method_variant follows the `cifar_bg_b2.0_g0.5` schema so the
+# downstream heatmap renderer can pick each cell up by regex.
+methods: [fi_edl]
+seeds: [0, 1, 2, 3, 4]
+run_eval: true
+overrides:
+  - dataset=cifar10
+  - backbone=resnet18
+  - trainer.max_epochs=100
+  - data.batch_size=64
+  - optimizer.lr=0.0005
+  - loss.beta=2.0
+  - loss.gamma=0.5
+  - experiment.method_variant=cifar_bg_b2.0_g0.5
