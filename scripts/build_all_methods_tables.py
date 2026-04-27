@@ -37,6 +37,7 @@ _METHOD_LABELS: Dict[Tuple[str, str], Tuple[str, int]] = {
     ("edl_fixed", "edl_fixed_l0001"):    ("EDL (λ=0.001)",        12),
     ("i_edl", "i_edl"):                  ("I-EDL",                20),
     ("r_edl", "r_edl"):                  ("R-EDL",                30),
+    ("re_edl", "re_edl"):                ("Re-EDL",               31),
     ("fi_edl", "fi_edl"):                ("FI-EDL (ours)",        40),
     ("fi_edl", "fi_edl_constant"):       ("FI-EDL — const gate",  50),
     ("fi_edl", "fi_edl_alpha0_gate"):    ("FI-EDL — α₀ info",     51),

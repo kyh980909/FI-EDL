@@ -17,6 +17,7 @@ import src.losses.edl_fixed  # noqa: F401
 import src.losses.fi_edl  # noqa: F401
 import src.losses.i_edl  # noqa: F401
 import src.losses.r_edl  # noqa: F401
+import src.losses.re_edl  # noqa: F401
 
 # Scores
 import src.scores.alpha0  # noqa: F401

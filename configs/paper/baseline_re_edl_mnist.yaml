@@ -1,0 +1,8 @@
+# Re-EDL matched-protocol baseline on MNIST (paper Table 5 row companion).
+# Same backbone/epochs/batch/lr/seeds as the FI-EDL main run.
+methods: [re_edl]
+seeds: [0, 1, 2, 3, 4]
+run_eval: true
+overrides:
+  - dataset=mnist
+  - backbone=convnet

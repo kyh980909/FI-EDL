@@ -55,6 +55,8 @@ def _loss_kwargs(cfg) -> Dict[str, Any]:
         }
     if loss_name == "r_edl":
         return {"lambda_prior": cfg.loss.lambda_prior}
+    if loss_name == "re_edl":
+        return {"lambda_prior": cfg.loss.lambda_prior}
     raise ValueError(f"Unsupported loss.name: {loss_name}")
 
 
