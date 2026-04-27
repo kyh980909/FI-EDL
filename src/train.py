@@ -92,7 +92,15 @@ def _wandb_enabled(cfg: DictConfig) -> bool:
 
 
 def _build_loggers(cfg: DictConfig, run_name: str, run_dir):
-    loggers = [CSVLogger(save_dir=cfg.logging.local_dir, name=cfg.experiment.name)]
+    # `version=run_name` keeps the per-run CSV log directory unique even when
+    # two src.train processes start concurrently (e.g., MNIST + CIFAR seeds of
+    # the same experiment). Without it both processes auto-version to
+    # `version_0` and clobber each other's metrics.csv headers.
+    loggers = [CSVLogger(
+        save_dir=cfg.logging.local_dir,
+        name=cfg.experiment.name,
+        version=run_name,
+    )]
     wandb_cfg = OmegaConf.select(cfg, "logging.wandb", default=None)
     if wandb_cfg is None or not _wandb_enabled(cfg):
         print("[WANDB] disabled (pass logging.wandb.enabled=true, or set FIEDL_WANDB=1)")
