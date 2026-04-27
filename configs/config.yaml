@@ -50,7 +50,7 @@ trainer:
 logging:
   local_dir: runs
   wandb:
-    enabled: false
+    enabled: true
     project: fi-edl
     entity: null
     tags: []
