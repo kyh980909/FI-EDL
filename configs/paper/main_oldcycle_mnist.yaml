@@ -1,0 +1,23 @@
+# Old-cycle MNIST main results — matches the I-EDL paper protocol:
+#   ConvNet backbone, 200 epochs, batch=64, lr=1e-3, val_split=0.2 from train,
+#   early stopping on val/loss with patience=20.
+
+methods: [edl_l1, i_edl, r_edl, re_edl, fi_edl]
+seeds: [0, 1, 2, 3, 4]
+run_eval: true
+overrides:
+  - dataset=mnist
+  - backbone=convnet
+  - trainer.max_epochs=200
+  - data.batch_size=64
+  - data.val_from_train=true
+  - data.val_split=0.2
+  - optimizer.lr=0.001
+  - trainer.precision=32-true
+  - trainer.early_stopping=true
+  - trainer.early_stopping_monitor=val/loss
+  - trainer.early_stopping_mode=min
+  - trainer.early_stopping_patience=20
+  - eval.confidence_scores=[maxp,maxalpha]
+  - logging.backend=csv
+  - logging.wandb.enabled=false

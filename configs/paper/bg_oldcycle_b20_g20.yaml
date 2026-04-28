@@ -1,0 +1,24 @@
+# Old-cycle (β=2.0, γ=2.0) sensitivity cell — VGG16+200ep+early-stop protocol.
+# method_variant uses 'cifar_bg_b2.0_g2.0' so the heatmap renderer picks it up.
+methods: [fi_edl]
+seeds: [0, 1, 2, 3, 4]
+run_eval: true
+overrides:
+  - dataset=cifar10
+  - backbone=vgg16
+  - trainer.max_epochs=200
+  - data.batch_size=64
+  - data.val_from_train=true
+  - data.val_split=0.05
+  - optimizer.lr=0.0005
+  - trainer.precision=32-true
+  - trainer.early_stopping=true
+  - trainer.early_stopping_monitor=val/loss
+  - trainer.early_stopping_mode=min
+  - trainer.early_stopping_patience=20
+  - eval.confidence_scores=[maxp,maxalpha]
+  - logging.backend=csv
+  - logging.wandb.enabled=false
+  - loss.beta=2.0
+  - loss.gamma=2.0
+  - experiment.method_variant=cifar_bg_b2.0_g2.0

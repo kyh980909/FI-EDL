@@ -8,6 +8,7 @@ depend on them.
 # Backbones
 import src.models.backbones.convnet  # noqa: F401
 import src.models.backbones.resnet18  # noqa: F401
+import src.models.backbones.vgg16  # noqa: F401
 
 # Heads
 import src.models.heads.edl_head  # noqa: F401

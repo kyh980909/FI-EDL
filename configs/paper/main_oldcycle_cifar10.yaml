@@ -1,0 +1,26 @@
+# Old-cycle CIFAR-10 main results — matches the I-EDL/R-EDL paper protocol:
+#   VGG16 backbone, 200 epochs, batch=64, lr=5e-4, val_split=0.05 from train,
+#   early stopping on val/loss with patience=20.
+#
+# Used for the "matched-rerun" baseline rows in Tables 1, 2, 3 of the
+# old-cycle (VGG16) version of the journal paper.
+
+methods: [edl_l1, i_edl, r_edl, re_edl, fi_edl]
+seeds: [0, 1, 2, 3, 4]
+run_eval: true
+overrides:
+  - dataset=cifar10
+  - backbone=vgg16
+  - trainer.max_epochs=200
+  - data.batch_size=64
+  - data.val_from_train=true
+  - data.val_split=0.05
+  - optimizer.lr=0.0005
+  - trainer.precision=32-true
+  - trainer.early_stopping=true
+  - trainer.early_stopping_monitor=val/loss
+  - trainer.early_stopping_mode=min
+  - trainer.early_stopping_patience=20
+  - eval.confidence_scores=[maxp,maxalpha]
+  - logging.backend=csv
+  - logging.wandb.enabled=false
