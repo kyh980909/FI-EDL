@@ -6,9 +6,15 @@ Loads `runs/`, aggregates mean ± std across seeds per
   - all_methods_long.csv        — every (method, dataset, metric) cell
   - all_methods_<dataset>.md    — reviewer-ready wide tables (rows = method)
 
-By default the beta/gamma sensitivity sweep (variants matching
-``cifar_bg_b*_g*``) is excluded from the headline tables; pass
-``--include-bg`` to keep them.
+By default two ablation-only variant groups are hidden from the headline
+tables so that every visible row corresponds to a published method:
+
+  - The EDL lambda sweep (``edl_l01``, ``edl_l0001``) — Sensoy et al. 2018
+    only specifies lambda_target = 1.0 with 10-epoch annealing, so
+    ``edl_l1`` is the canonical EDL baseline. Pass ``--include-edl-sweep``
+    to add the two extra lambda values back.
+  - The beta/gamma sensitivity sweep (variants matching
+    ``cifar_bg_b*_g*``) — pass ``--include-bg`` to keep them.
 
 Usage::
 
@@ -30,11 +36,19 @@ from scripts._loader import load_runs
 
 _BG_VARIANT_RE = re.compile(r"^cifar_bg_b[\d.]+_g[\d.]+$")
 
+# Sensoy et al. 2018 specifies only lambda_target=1.0 (annealed over 10
+# epochs); the other two variants are FI-EDL-side sensitivity probes and
+# do not represent a published EDL baseline.
+_EDL_SWEEP_VARIANTS: set[Tuple[str, str]] = {
+    ("edl_fixed", "edl_fixed_l01"),
+    ("edl_fixed", "edl_fixed_l0001"),
+}
+
 # (method, method_variant) -> display label, sort priority.
 _METHOD_LABELS: Dict[Tuple[str, str], Tuple[str, int]] = {
-    ("edl_fixed", "edl_fixed_l1"):       ("EDL (λ=1.0)",          10),
-    ("edl_fixed", "edl_fixed_l01"):      ("EDL (λ=0.1)",          11),
-    ("edl_fixed", "edl_fixed_l0001"):    ("EDL (λ=0.001)",        12),
+    ("edl_fixed", "edl_fixed_l1"):       ("EDL (Sensoy 2018)",    10),
+    ("edl_fixed", "edl_fixed_l01"):      ("EDL — λ=0.1 sweep",    60),
+    ("edl_fixed", "edl_fixed_l0001"):    ("EDL — λ=0.001 sweep",  61),
     ("i_edl", "i_edl"):                  ("I-EDL",                20),
     ("r_edl", "r_edl"):                  ("R-EDL",                30),
     ("re_edl", "re_edl"):                ("Re-EDL",               31),
@@ -169,12 +183,15 @@ def _build_table(agg: pd.DataFrame, spec: TableSpec,
     return lines
 
 
-def _present_method_keys(agg: pd.DataFrame, include_bg: bool) -> List[Tuple[str, str]]:
+def _present_method_keys(agg: pd.DataFrame, include_bg: bool,
+                         include_edl_sweep: bool) -> List[Tuple[str, str]]:
     pairs = agg[["method", "method_variant"]].drop_duplicates()
     keys: List[Tuple[str, str]] = []
     for _, r in pairs.iterrows():
         m, v = r["method"], r["method_variant"] or ""
         if not include_bg and _BG_VARIANT_RE.match(v):
+            continue
+        if not include_edl_sweep and (m, v) in _EDL_SWEEP_VARIANTS:
             continue
         keys.append((m, v))
     keys.sort(key=lambda mv: (_label_for(*mv)[1], _label_for(*mv)[0]))
@@ -206,6 +223,9 @@ def main() -> None:
     parser.add_argument("--out-dir", default="results/all_methods")
     parser.add_argument("--include-bg", action="store_true",
                         help="Include the cifar_bg_b*_g* sensitivity-sweep variants in the tables.")
+    parser.add_argument("--include-edl-sweep", action="store_true",
+                        help="Include the EDL lambda=0.1 and lambda=0.001 sweep rows. "
+                             "By default only Sensoy's canonical lambda=1.0 EDL appears.")
     args = parser.parse_args()
 
     df = load_runs(Path(args.runs))
@@ -214,7 +234,11 @@ def main() -> None:
     df["method_variant"] = df["method_variant"].fillna("")
 
     agg = _aggregate(df)
-    method_keys = _present_method_keys(agg, include_bg=args.include_bg)
+    method_keys = _present_method_keys(
+        agg,
+        include_bg=args.include_bg,
+        include_edl_sweep=args.include_edl_sweep,
+    )
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
