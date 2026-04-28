@@ -18,7 +18,9 @@ overrides:
   - trainer.early_stopping_patience=20
   - eval.confidence_scores=[maxp,maxalpha]
   - logging.backend=csv
-  - logging.wandb.enabled=false
+  - logging.wandb.enabled=true
+  - logging.wandb.project=FI-EDL-OldCycle-CIFAR10
+  - logging.local_dir=runs/oldcycle_cifar10
   - loss.info_type=fisher
   - loss.gate_type=exp
   - loss.detach_weight=false
