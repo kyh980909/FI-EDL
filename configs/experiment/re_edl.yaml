@@ -1,0 +1,12 @@
+# @package _global_
+# Re-EDL (Chen et al., arXiv 2024). Extension of R-EDL that additionally
+# drops the variance-minimization term from the squared-error fit, leaving
+# only the expected squared error against the rebased Dirichlet mean.
+
+experiment:
+  name: re_edl
+  method_variant: re_edl
+
+loss:
+  name: re_edl
+  lambda_prior: 0.1

@@ -1,0 +1,23 @@
+# Re-EDL baseline on MNIST (Chen et al., 2024b).
+# Matches main_mnist protocol (ConvNet, 200 epochs, lr=1e-3, val_split=20%,
+# early stopping patience=20). lambda_prior=0.1 (shared default).
+methods: [re_edl]
+seeds: [0, 1, 2, 3, 4]
+run_eval: true
+overrides:
+  - dataset=mnist
+  - backbone=convnet
+  - trainer.max_epochs=200
+  - data.batch_size=64
+  - data.val_from_train=true
+  - data.val_split=0.2
+  - optimizer.lr=0.001
+  - trainer.precision=32-true
+  - trainer.early_stopping=true
+  - trainer.early_stopping_monitor=val/loss
+  - trainer.early_stopping_mode=min
+  - trainer.early_stopping_patience=20
+  - eval.confidence_scores=[maxp,maxalpha]
+  - logging.wandb.enabled=true
+  - logging.wandb.project=FI-EDL-MNIST
+  - logging.local_dir=runs/mnist

@@ -1,0 +1,27 @@
+# Paper CIFAR-10 main results: EDL, I-EDL, R-EDL, FI-EDL (4 methods × 5 seeds).
+# Re-EDL requires a separate run: use preset baseline_re_edl_cifar10
+# (Re-EDL CIFAR-10 uses lambda_prior=0.8, which differs from the shared default).
+#
+# Protocol: VGG-16, 200 epochs, batch=64, lr=5e-4, val_split=5%,
+# early stopping on val/loss with patience=20.
+
+methods: [edl_l1, i_edl, r_edl, fi_edl]
+seeds: [0, 1, 2, 3, 4]
+run_eval: true
+overrides:
+  - dataset=cifar10
+  - backbone=vgg16
+  - trainer.max_epochs=200
+  - data.batch_size=64
+  - data.val_from_train=true
+  - data.val_split=0.05
+  - optimizer.lr=0.0005
+  - trainer.precision=32-true
+  - trainer.early_stopping=true
+  - trainer.early_stopping_monitor=val/loss
+  - trainer.early_stopping_mode=min
+  - trainer.early_stopping_patience=20
+  - eval.confidence_scores=[maxp,maxalpha]
+  - logging.wandb.enabled=true
+  - logging.wandb.project=FI-EDL-CIFAR10
+  - logging.local_dir=runs/cifar10

@@ -1,0 +1,25 @@
+# Re-EDL baseline on CIFAR-10 (Chen et al., 2024b).
+# Matches main_cifar10 protocol (VGG-16, 200 epochs, lr=5e-4, val_split=5%,
+# early stopping patience=20). Uses lambda_prior=0.8 (CIFAR-10 specific;
+# differs from MNIST default of 0.1 — kept as a separate preset for this reason).
+methods: [re_edl]
+seeds: [0, 1, 2, 3, 4]
+run_eval: true
+overrides:
+  - dataset=cifar10
+  - backbone=vgg16
+  - trainer.max_epochs=200
+  - data.batch_size=64
+  - data.val_from_train=true
+  - data.val_split=0.05
+  - optimizer.lr=0.0005
+  - trainer.precision=32-true
+  - trainer.early_stopping=true
+  - trainer.early_stopping_monitor=val/loss
+  - trainer.early_stopping_mode=min
+  - trainer.early_stopping_patience=20
+  - eval.confidence_scores=[maxp,maxalpha]
+  - logging.wandb.enabled=true
+  - loss.lambda_prior=0.8
+  - logging.wandb.project=FI-EDL-CIFAR10
+  - logging.local_dir=runs/cifar10
