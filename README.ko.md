@@ -21,6 +21,20 @@ cd FI-EDL
 uv sync --dev
 ```
 
+## GPU 요구사항
+
+**VRAM 4 GB 이상**의 CUDA GPU라면 전체 실험을 실행할 수 있습니다.
+
+| 실험 | 백본 | 최소 VRAM |
+|---|---|---|
+| MNIST (ConvNet) | 4-layer ConvNet (약 2.4M 파라미터) | 2 GB |
+| CIFAR-10 (VGG-16) | CIFAR용 VGG-16 BN (약 9.5M 파라미터) | 4 GB |
+
+배치 크기 64, float32 기준입니다.
+**6 GB GPU** (RTX 3060, RTX 2060, GTX 1080 등)라면 두 데이터셋 모두 여유롭게 실행 가능합니다.
+README에 표기된 학습 시간은 NVIDIA H100 80 GB 기준이며,
+일반 소비자용 GPU에서는 4–10배 더 걸릴 수 있습니다.
+
 ## 단일 실행
 
 ```bash

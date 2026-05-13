@@ -21,6 +21,20 @@ cd FI-EDL
 uv sync --dev
 ```
 
+## GPU requirements
+
+Any CUDA-capable GPU with **4 GB VRAM or more** can run the full experiment suite.
+
+| Experiment | Backbone | Minimum VRAM |
+|---|---|---|
+| MNIST (ConvNet) | 4-layer ConvNet (~2.4 M params) | 2 GB |
+| CIFAR-10 (VGG-16) | CIFAR-style VGG-16 BN (~9.5 M params) | 4 GB |
+
+Both datasets use batch size 64 and full float32 precision.
+A **6 GB GPU** (e.g. RTX 3060, RTX 2060, GTX 1080) comfortably covers both.
+Training times in this README are measured on a single NVIDIA H100 80 GB GPU;
+expect 4–10× longer on a mid-range consumer GPU.
+
 ## Single run
 
 ```bash
