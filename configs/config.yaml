@@ -15,6 +15,9 @@ model:
   num_classes: 10
   pretrained: false
   evidence_fn: softplus
+  backbone_spectral_norm: false  # set true for F-EDL (Algorithm 1 applies SN to backbone)
+  head_num_layers: 1             # MLP depth for p/τ heads (F-EDL: 2 for CIFAR, 1 for MNIST)
+  head_hidden_dim: 256           # hidden units per MLP layer (F-EDL: 256 for CIFAR, 64 for MNIST)
 
 score:
   name: vacuity
@@ -34,6 +37,8 @@ optimizer:
 scheduler:
   name: none
   warmup_epochs: 0
+  step_size: 30   # for steplr: decay lr every step_size epochs
+  gamma: 0.1      # for steplr: multiplicative decay factor
 
 trainer:
   max_epochs: 100

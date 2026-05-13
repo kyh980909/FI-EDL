@@ -1,6 +1,8 @@
 # @package _global_
 # F-EDL: Flexible Evidential Deep Learning (Yoon et al., NeurIPS 2025).
-# Uses a Flexible Dirichlet distribution predicted by three sub-heads (α, p, τ).
+# Architecture per Appendix E.2:
+#   - p/τ sub-heads: 2-layer MLP (L=2, H=256) for CIFAR-10/100
+#   - Spectral norm on backbone (θ) and α head (φ₁) per Algorithm 1
 # Reference: https://github.com/TaeseongYoon/F-EDL
 
 experiment:
@@ -9,6 +11,9 @@ experiment:
 
 model:
   head: f_edl
+  backbone_spectral_norm: true  # Algorithm 1: SN applied to θ (backbone) and φ₁ (α head)
+  head_num_layers: 2            # Appendix E.2: L=2 for CIFAR-10/100 (override to 1 for MNIST)
+  head_hidden_dim: 256          # Appendix E.2: H=256 for CIFAR-10/100
 
 loss:
   name: f_edl

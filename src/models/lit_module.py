@@ -18,6 +18,7 @@ from typing import Any, Dict
 import pytorch_lightning as pl
 import torch
 from torch import Tensor, nn
+from torch.nn.utils import spectral_norm as _spectral_norm
 
 # Populates all registries via side-effect imports.
 import src.registry  # noqa: F401
@@ -32,6 +33,15 @@ from src.registry.backbones import BACKBONE_REGISTRY
 from src.registry.heads import HEAD_REGISTRY
 from src.registry.losses import LOSS_REGISTRY
 from src.registry.scores import SCORE_REGISTRY
+
+
+def _apply_spectral_norm(module: nn.Module) -> None:
+    """Recursively apply spectral norm to all Conv2d and Linear weight matrices."""
+    for child in module.children():
+        if isinstance(child, (nn.Linear, nn.Conv2d)):
+            _spectral_norm(child)
+        else:
+            _apply_spectral_norm(child)
 
 
 def _loss_kwargs(cfg) -> Dict[str, Any]:
@@ -83,12 +93,22 @@ class FIEDLLightningModule(pl.LightningModule):
         self.backbone: nn.Module = backbone_cls(**backbone_kwargs)
         assert_module_instance(self.backbone, BackboneProtocol, "backbone")
 
+        # Optionally apply spectral norm to entire backbone (required by F-EDL Algorithm 1).
+        if getattr(cfg.model, "backbone_spectral_norm", False):
+            _apply_spectral_norm(self.backbone)
+
         head_cls = HEAD_REGISTRY.get(cfg.model.head)
-        self.head: nn.Module = head_cls(
+        head_kwargs: Dict[str, Any] = dict(
             in_dim=self.backbone.out_dim,
             num_classes=cfg.model.num_classes,
             evidence_fn=cfg.model.evidence_fn,
         )
+        head_sig = inspect.signature(head_cls.__init__)
+        if "head_num_layers" in head_sig.parameters:
+            head_kwargs["head_num_layers"] = int(getattr(cfg.model, "head_num_layers", 1))
+        if "head_hidden_dim" in head_sig.parameters:
+            head_kwargs["head_hidden_dim"] = int(getattr(cfg.model, "head_hidden_dim", 256))
+        self.head: nn.Module = head_cls(**head_kwargs)
         assert_module_instance(self.head, HeadProtocol, "head")
 
         loss_cls = LOSS_REGISTRY.get(cfg.loss.name)
@@ -233,5 +253,10 @@ class FIEDLLightningModule(pl.LightningModule):
             return {"optimizer": optim}
         if sched_name == "cosine":
             sched = torch.optim.lr_scheduler.CosineAnnealingLR(optim, T_max=self.cfg.trainer.max_epochs)
+            return {"optimizer": optim, "lr_scheduler": sched}
+        if sched_name == "steplr":
+            step_size = int(getattr(self.cfg.scheduler, "step_size", 30))
+            gamma = float(getattr(self.cfg.scheduler, "gamma", 0.1))
+            sched = torch.optim.lr_scheduler.StepLR(optim, step_size=step_size, gamma=gamma)
             return {"optimizer": optim, "lr_scheduler": sched}
         raise ValueError(f"Unsupported scheduler.name: {self.cfg.scheduler.name}")
