@@ -3,16 +3,19 @@
 [English](README.md) | **한국어**
 
 Fisher Information–based Evidential Deep Learning (FI-EDL) 논문 실험 재현
-패키지. 다섯 가지 손실 방법을 MNIST·CIFAR-10에서 학습·평가하고 논문의 주요
-표(OOD 탐지, 신뢰도, ECE)를 재현합니다.
+패키지. **일곱 가지** EDL 방법을 MNIST·CIFAR-10에서 학습·평가하고 논문의 주요
+표(OOD 탐지, 신뢰도, ECE)를 재현합니다. 최근 발표된 비교 베이스라인인
+DAEDL·F-EDL도 포함되어 있습니다(Neurocomputing 저널 확장 대응).
 
-| 메서드 | Hydra `experiment` 키 | 손실 이름 |
-|---|---|---|
-| EDL (λ = 1.0) | `edl_l1` | `edl_fixed` |
-| I-EDL (Deng et al., 2023) | `i_edl` | `i_edl` |
-| R-EDL (Chen et al., 2024a) | `r_edl` | `r_edl` |
-| Re-EDL (Chen et al., 2024b) | `re_edl` | `re_edl` |
-| FI-EDL (본 연구) | `fi_edl` | `fi_edl` |
+| 메서드 | Hydra `experiment` 키 | 손실 이름 | 헤드 |
+|---|---|---|---|
+| EDL (λ = 1.0) | `edl_l1` | `edl_fixed` | `edl` |
+| I-EDL (Deng et al., 2023) | `i_edl` | `i_edl` | `edl` |
+| R-EDL (Chen et al., 2024a) | `r_edl` | `r_edl` | `edl` |
+| Re-EDL (Chen et al., 2024b) | `re_edl` | `re_edl` | `edl` |
+| **DAEDL** (Yoon et al., 2024) | `daedl` | `daedl` | `daedl` |
+| **F-EDL** (Yoon et al., 2025) | `f_edl` | `f_edl` | `f_edl` |
+| FI-EDL (본 연구) | `fi_edl` | `fi_edl` | `edl` |
 
 ## 설치
 
@@ -70,6 +73,28 @@ uv run python run.py preset baseline_re_edl_cifar10
 
 > Re-EDL은 CIFAR-10(0.8)과 MNIST(0.1)에서 서로 다른 `lambda_prior`를 사용하므로
 > 별도 프리셋으로 분리되어 있습니다.
+
+### DAEDL·F-EDL 베이스라인 (Neurocomputing 저널 확장)
+
+개별 추가 또는 7-method 전체 비교로 실행합니다.
+
+```bash
+# 개별 베이스라인
+uv run python run.py preset baseline_fedl_mnist        # F-EDL MNIST  (~30분/seed × 5)
+uv run python run.py preset baseline_fedl_cifar10      # F-EDL CIFAR-10  (~80분/seed × 5)
+uv run python run.py preset baseline_daedl_mnist       # DAEDL MNIST  (~35분/seed × 5)
+uv run python run.py preset baseline_daedl_cifar10     # DAEDL CIFAR-10  (~110분/seed × 5)
+
+# 7-method 전체 비교 (저널 메인 표)
+uv run python run.py preset comparison_all_mnist       # 7-method × 5 seeds, MNIST
+uv run python run.py preset comparison_all_cifar10     # 6-method × 5 seeds, CIFAR-10
+uv run python run.py preset baseline_re_edl_cifar10    # Re-EDL CIFAR-10 (lambda_prior=0.8)
+```
+
+> **DAEDL 구현 주의**: 이 저장소의 DAEDL은 공식 normalizing-flow 밀도 추정 대신
+> spectral norm + 학습 가능 class prototype 밀도를 사용하는 근사 버전입니다.
+> 공식 코드 확보 시 `src/models/heads/daedl_head.py`만 교체하면 나머지 파이프라인은
+> 그대로 사용할 수 있습니다.
 
 ### 컨트롤러 ablation (표 3)
 
@@ -129,7 +154,7 @@ uv run python scripts/plot_training_dynamics.py --runs runs --out results/dynami
 ```
 configs/
   config.yaml          # 공통 기본값
-  experiment/*.yaml    # 5개 메서드 선택자
+  experiment/*.yaml    # 7개 메서드 선택자 (daedl, f_edl 포함)
   dataset/*.yaml       # MNIST / CIFAR-10
   backbone/*.yaml      # convnet / vgg16 / resnet18
   paper/*.yaml         # 프리셋 (methods × seeds × overrides)
@@ -137,8 +162,8 @@ src/
   contracts/           # 프로토콜 (Backbone, Head, Loss, Score)
   registry/            # 플러그인 레지스트리 + 등록 side-effect import
   data/                # LightningDataModule + MNIST / CIFAR-10 어댑터
-  models/              # LightningModule + backbones + heads
-  losses/              # edl_fixed, i_edl, r_edl, re_edl, fi_edl
+  models/              # LightningModule + backbones + heads (edl, daedl, f_edl)
+  losses/              # edl_fixed, i_edl, r_edl, re_edl, fi_edl, daedl, f_edl_flex
   scores/              # maxp, alpha0, vacuity
   metrics/             # OOD · calibration 메트릭 (numpy)
   callbacks/           # NaN 감지

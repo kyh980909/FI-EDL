@@ -3,16 +3,20 @@
 **English** | [한국어](README.ko.md)
 
 Reproduction package for the FI-EDL (Fisher Information–based Evidential Deep
-Learning) paper. Trains and evaluates five loss variants on MNIST and CIFAR-10,
-then reproduces the paper's main tables (OOD detection, confidence, ECE).
+Learning) paper. Trains and evaluates **seven** EDL variants on MNIST and
+CIFAR-10, then reproduces the paper's main tables (OOD detection, confidence,
+ECE). The two recently published baselines — DAEDL and F-EDL — are included for
+the Neurocomputing journal extension comparison.
 
-| Method | Hydra `experiment` key | Loss name |
-|---|---|---|
-| EDL (λ = 1.0) | `edl_l1` | `edl_fixed` |
-| I-EDL (Deng et al., 2023) | `i_edl` | `i_edl` |
-| R-EDL (Chen et al., 2024a) | `r_edl` | `r_edl` |
-| Re-EDL (Chen et al., 2024b) | `re_edl` | `re_edl` |
-| FI-EDL (this paper) | `fi_edl` | `fi_edl` |
+| Method | Hydra `experiment` key | Loss name | Head |
+|---|---|---|---|
+| EDL (λ = 1.0) | `edl_l1` | `edl_fixed` | `edl` |
+| I-EDL (Deng et al., 2023) | `i_edl` | `i_edl` | `edl` |
+| R-EDL (Chen et al., 2024a) | `r_edl` | `r_edl` | `edl` |
+| Re-EDL (Chen et al., 2024b) | `re_edl` | `re_edl` | `edl` |
+| **DAEDL** (Yoon et al., 2024) | `daedl` | `daedl` | `daedl` |
+| **F-EDL** (Yoon et al., 2025) | `f_edl` | `f_edl` | `f_edl` |
+| FI-EDL (this paper) | `fi_edl` | `fi_edl` | `edl` |
 
 ## Setup
 
@@ -70,6 +74,28 @@ uv run python run.py preset baseline_re_edl_cifar10
 
 > Re-EDL uses a different `lambda_prior` on CIFAR-10 (0.8) vs MNIST (0.1),
 > so it runs as a separate preset instead of being bundled with the others.
+
+### DAEDL and F-EDL baselines (Neurocomputing journal extension)
+
+Run either individually or as a combined 7-method sweep:
+
+```bash
+# Individual baselines
+uv run python run.py preset baseline_fedl_mnist        # F-EDL MNIST  (~30 min/seed × 5)
+uv run python run.py preset baseline_fedl_cifar10      # F-EDL CIFAR-10  (~80 min/seed × 5)
+uv run python run.py preset baseline_daedl_mnist       # DAEDL MNIST  (~35 min/seed × 5)
+uv run python run.py preset baseline_daedl_cifar10     # DAEDL CIFAR-10  (~110 min/seed × 5)
+
+# Full 7-method comparison (all at once)
+uv run python run.py preset comparison_all_mnist       # 7-method × 5 seeds, MNIST
+uv run python run.py preset comparison_all_cifar10     # 6-method × 5 seeds, CIFAR-10
+uv run python run.py preset baseline_re_edl_cifar10    # Re-EDL CIFAR-10 (lambda_prior=0.8)
+```
+
+> **DAEDL note**: This repository uses a principled approximation
+> (spectral norm + learnable class-prototype density) for DAEDL.
+> If the official code becomes available, replace
+> `src/models/heads/daedl_head.py` — the rest of the pipeline is unchanged.
 
 ### Controller ablation (Table 3)
 
@@ -137,8 +163,8 @@ src/
   contracts/           # protocols (Backbone, Head, Loss, Score)
   registry/            # plugin registry + side-effect registration imports
   data/                # LightningDataModule + MNIST / CIFAR-10 adapters
-  models/              # LightningModule + backbones + heads
-  losses/              # edl_fixed, i_edl, r_edl, re_edl, fi_edl
+  models/              # LightningModule + backbones + heads (edl, daedl, f_edl)
+  losses/              # edl_fixed, i_edl, r_edl, re_edl, fi_edl, daedl, f_edl_flex
   scores/              # maxp, alpha0, vacuity
   metrics/             # OOD / calibration metrics (numpy)
   callbacks/           # NaN detector
