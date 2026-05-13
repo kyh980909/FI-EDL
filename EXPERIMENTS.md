@@ -8,13 +8,15 @@ experiment·스크립트로 재현되는지 추적할 수 있게 했습니다.
 
 ## 0. 메서드 ↔ Hydra 설정 매핑
 
-| 논문 표기 | Hydra `experiment` | `loss.name` | 설명 |
-|---|---|---|---|
-| EDL (λ = 1.0) | `edl_l1` | `edl_fixed` | Sensoy et al. 2018 베이스라인, KL 가중치 고정 |
-| **I-EDL** (Deng et al., 2023) | `i_edl` | `i_edl` | Fisher-weighted MSE + log-det Fisher + linear KL anneal |
-| **R-EDL** (Chen et al., 2024a) | `r_edl` | `r_edl` | KL 정규화 제거, λ_prior=0.1 (MNIST) / 0.8 (CIFAR-10) |
-| **Re-EDL** (Chen et al., 2024b) | `re_edl` | `re_edl` | KL + variance 항 모두 제거, λ_prior=0.1 (MNIST) / 0.8 (CIFAR-10) |
-| **FI-EDL (Ours)** | `fi_edl` | `fi_edl` | Fisher 정보 기반 적응형 KL 게이트 λ(v) = β·exp(−γ·v) |
+| 논문 표기 | Hydra `experiment` | `loss.name` | `model.head` | 설명 |
+|---|---|---|---|---|
+| EDL (λ = 1.0) | `edl_l1` | `edl_fixed` | `edl` | Sensoy et al. 2018 베이스라인, KL 가중치 고정 |
+| **I-EDL** (Deng et al., 2023) | `i_edl` | `i_edl` | `edl` | Fisher-weighted MSE + log-det Fisher + linear KL anneal |
+| **R-EDL** (Chen et al., 2024a) | `r_edl` | `r_edl` | `edl` | KL 정규화 제거, λ_prior=0.1 (MNIST) / 0.8 (CIFAR-10) |
+| **Re-EDL** (Chen et al., 2024b) | `re_edl` | `re_edl` | `edl` | KL + variance 항 모두 제거, λ_prior=0.1 (MNIST) / 0.8 (CIFAR-10) |
+| **DAEDL** (Yoon et al., 2024) | `daedl` | `daedl` | `daedl` | Spectral norm + class prototype 밀도 스케일링 |
+| **F-EDL** (Yoon et al., 2025) | `f_edl` | `f_edl` | `f_edl` | Flexible Dirichlet (α, p, τ) 3-head, spectral norm |
+| **FI-EDL (Ours)** | `fi_edl` | `fi_edl` | `edl` | Fisher 정보 기반 적응형 KL 게이트 λ(v) = β·exp(−γ·v) |
 
 데이터셋·백본:
 
@@ -60,6 +62,58 @@ experiment·스크립트로 재현되는지 추적할 수 있게 했습니다.
   uv run python scripts/build_table_conf.py --runs runs --out results/table_conf.csv
   ```
 - **참고**: 문헌 기반 baseline은 재현 대상이 아니므로 표에는 그대로 옮겨 씁니다.
+
+---
+
+## 1-B. Neurocomputing 저널 확장 — DAEDL·F-EDL 비교 실험
+
+7-method matched-pipeline 비교 (EDL · I-EDL · R-EDL · Re-EDL · **DAEDL** · **F-EDL** · **FI-EDL**).
+
+### 방법 설명
+
+| 메서드 | 핵심 차이 | 헤드 | 손실 |
+|---|---|---|---|
+| **DAEDL** (Yoon et al., ICML 2024) | Spectral norm + class prototype 밀도로 evidence 재스케일 | `daedl` | `daedl` (= edl_fixed) |
+| **F-EDL** (Yoon et al., NeurIPS 2025) | Flexible Dirichlet (α, p, τ) 3-head; FD 기댓값 MSE + Brier | `f_edl` | `f_edl` |
+
+> **DAEDL 구현 주의**: 원논문의 normalizing-flow 기반 밀도 추정을 learnable class prototype + RBF
+> 밀도로 근사한 버전입니다. 공식 코드 확보 시 `src/models/heads/daedl_head.py`만 교체하면
+> 나머지 파이프라인은 그대로 사용 가능합니다.
+
+### 실행 — 개별 베이스라인 (단독 추가만 필요할 때)
+
+```bash
+# F-EDL
+uv run python run.py preset baseline_fedl_mnist       # MNIST 5-seed
+uv run python run.py preset baseline_fedl_cifar10     # CIFAR-10 5-seed
+
+# DAEDL
+uv run python run.py preset baseline_daedl_mnist      # MNIST 5-seed
+uv run python run.py preset baseline_daedl_cifar10    # CIFAR-10 5-seed
+```
+
+### 실행 — 7-method 전체 비교 (저널 메인 표)
+
+```bash
+# 7-method × 5 seed × MNIST  (Re-EDL lambda_prior=0.1 포함)
+uv run python run.py preset comparison_all_mnist
+
+# 7-method × 5 seed × CIFAR-10  (Re-EDL lambda_prior=0.8은 별도)
+uv run python run.py preset comparison_all_cifar10
+uv run python run.py preset baseline_re_edl_cifar10
+
+# 집계 (기존 스크립트 그대로)
+uv run python scripts/build_table_ood.py  --runs runs --out results/table_ood_7method.csv
+uv run python scripts/build_table_conf.py --runs runs --out results/table_conf_7method.csv
+uv run python scripts/build_table_ece.py  --runs runs --out results/table_ece_7method.csv
+```
+
+결과 디렉터리 구조:
+```
+runs/
+  mnist/   f_edl/seed_{0..4}/  daedl/seed_{0..4}/  ...
+  cifar10/ f_edl/seed_{0..4}/  daedl/seed_{0..4}/  ...
+```
 
 ### Table 4 — AUCE Summary (`tab:auce_support`)
 
@@ -142,6 +196,8 @@ experiment·스크립트로 재현되는지 추적할 수 있게 했습니다.
 
 ## 2. 프리셋 요약
 
+### 기존 NeurIPS 프리셋 (5-method)
+
 | 프리셋 (`configs/paper/*.yaml`) | 대응 표/그림 | 실행 시간 규모 |
 |---|---|---|
 | `main_mnist` | Table 2 (MNIST 열), Table 4 (MNIST), Table 5 (MNIST), reliability (MNIST) | 4 메서드 × 5 seed × 200 epochs (convnet) |
@@ -152,6 +208,17 @@ experiment·스크립트로 재현되는지 추적할 수 있게 했습니다.
 | `controller_alpha0_gate` | Table 6 — α₀ gate 행 | 5 seed × 200 epochs (vgg16) |
 | `controller_fim_nodetach` | Table 6 — FIM no-detach 행 | 5 seed × 200 epochs (vgg16) |
 | `bg_b*_g*` (9개) | Table 7 β·γ sensitivity | 1 설정 × 5 seed × 200 epochs (vgg16), 9개 순차 실행 |
+
+### 추가 저널 확장 프리셋 (DAEDL·F-EDL 비교)
+
+| 프리셋 (`configs/paper/*.yaml`) | 대응 표 | 실행 시간 규모 |
+|---|---|---|
+| `baseline_fedl_mnist` | 저널 Table 1 F-EDL MNIST 행 | 1 메서드 × 5 seed × 200 epochs (convnet) |
+| `baseline_fedl_cifar10` | 저널 Table 1 F-EDL CIFAR-10 행 | 1 메서드 × 5 seed × 200 epochs (vgg16) |
+| `baseline_daedl_mnist` | 저널 Table 1 DAEDL MNIST 행 | 1 메서드 × 5 seed × 200 epochs (convnet) |
+| `baseline_daedl_cifar10` | 저널 Table 1 DAEDL CIFAR-10 행 | 1 메서드 × 5 seed × 200 epochs (vgg16) |
+| `comparison_all_mnist` | 저널 Table 1/3 MNIST 전체 (7-method, Re-EDL 포함) | 7 메서드 × 5 seed × 200 epochs (convnet) |
+| `comparison_all_cifar10` | 저널 Table 1/3 CIFAR-10 전체 (Re-EDL은 별도) | 6 메서드 × 5 seed × 200 epochs (vgg16) |
 
 ---
 
@@ -188,6 +255,8 @@ experiment·스크립트로 재현되는지 추적할 수 있게 했습니다.
 
 ## 5. 논문 표 재현 체크리스트
 
+### 5-A. NeurIPS 원고 (5-method)
+
 - [ ] `uv sync --dev`
 - [ ] `uv run python run.py preset main_mnist`  →  MNIST 관련 행/그림 (4개 메서드)
 - [ ] `uv run python run.py preset main_cifar10`  →  CIFAR-10 관련 행/그림 (4개 메서드)
@@ -198,3 +267,14 @@ experiment·스크립트로 재현되는지 추적할 수 있게 했습니다.
 - [ ] `build_table_ood.py` / `build_table_conf.py` / `build_table_ece.py` 순차 실행
 - [ ] `plot_reliability.py` / `plot_training_dynamics.py` 실행
 - [ ] 생성된 CSV/PDF를 논문 본문 수치와 대조
+
+### 5-B. Neurocomputing 저널 확장 (7-method: +DAEDL, +F-EDL)
+
+- [ ] `uv run python run.py preset comparison_all_mnist`  →  7-method MNIST 5-seed
+- [ ] `uv run python run.py preset comparison_all_cifar10`  →  6-method CIFAR-10 5-seed
+- [ ] `uv run python run.py preset baseline_re_edl_cifar10`  →  Re-EDL CIFAR-10 (lambda_prior=0.8)
+- [ ] `build_table_ood.py --runs runs --out results/table_ood_7method.csv`
+- [ ] `build_table_conf.py --runs runs --out results/table_conf_7method.csv`
+- [ ] `build_table_ece.py --runs runs --out results/table_ece_7method.csv`
+- [ ] DAEDL 공식 코드 확보 후 `src/models/heads/daedl_head.py` 교체 여부 검토
+- [ ] 7-method 결과를 저널 본문 수치와 대조

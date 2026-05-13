@@ -1,0 +1,14 @@
+# @package _global_
+# F-EDL: Flexible Evidential Deep Learning (Yoon et al., NeurIPS 2025).
+# Uses a Flexible Dirichlet distribution predicted by three sub-heads (α, p, τ).
+# Reference: https://github.com/TaeseongYoon/F-EDL
+
+experiment:
+  name: f_edl
+  method_variant: f_edl
+
+model:
+  head: f_edl
+
+loss:
+  name: f_edl

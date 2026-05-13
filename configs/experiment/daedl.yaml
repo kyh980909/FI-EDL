@@ -1,0 +1,17 @@
+# @package _global_
+# DA-EDL: Distribution-Aware EDL (Yoon et al., ICML 2024).
+# Spectral normalisation + class-prototype density-weighted evidence.
+# NOTE: This uses a principled approximation of the density mechanism;
+#       validate against the official code when available.
+
+experiment:
+  name: daedl
+  method_variant: daedl
+
+model:
+  head: daedl
+
+loss:
+  name: daedl
+  lambda_value: 1.0
+  anneal_epochs: 10

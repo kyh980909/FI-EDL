@@ -11,15 +11,17 @@ from src.registry.scores import SCORE_REGISTRY
 
 
 def test_expected_backbones_registered():
-    assert set(BACKBONE_REGISTRY.keys()) == {"convnet", "resnet18"}
+    assert set(BACKBONE_REGISTRY.keys()) == {"convnet", "resnet18", "vgg16"}
 
 
 def test_expected_heads_registered():
-    assert set(HEAD_REGISTRY.keys()) == {"edl"}
+    assert set(HEAD_REGISTRY.keys()) == {"edl", "daedl", "f_edl"}
 
 
 def test_expected_losses_registered():
-    assert set(LOSS_REGISTRY.keys()) == {"edl_fixed", "fi_edl", "i_edl"}
+    assert set(LOSS_REGISTRY.keys()) == {
+        "edl_fixed", "fi_edl", "i_edl", "r_edl", "re_edl", "daedl", "f_edl",
+    }
 
 
 def test_expected_scores_registered():

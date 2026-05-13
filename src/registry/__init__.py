@@ -12,6 +12,8 @@ import src.models.backbones.vgg16  # noqa: F401
 
 # Heads
 import src.models.heads.edl_head  # noqa: F401
+import src.models.heads.daedl_head  # noqa: F401
+import src.models.heads.f_edl_head  # noqa: F401
 
 # Losses
 import src.losses.edl_fixed  # noqa: F401
@@ -19,6 +21,8 @@ import src.losses.fi_edl  # noqa: F401
 import src.losses.i_edl  # noqa: F401
 import src.losses.r_edl  # noqa: F401
 import src.losses.re_edl  # noqa: F401
+import src.losses.daedl  # noqa: F401
+import src.losses.f_edl_flex  # noqa: F401
 
 # Scores
 import src.scores.alpha0  # noqa: F401

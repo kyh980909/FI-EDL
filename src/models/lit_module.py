@@ -57,6 +57,13 @@ def _loss_kwargs(cfg) -> Dict[str, Any]:
         return {"lambda_prior": cfg.loss.lambda_prior}
     if loss_name == "re_edl":
         return {"lambda_prior": cfg.loss.lambda_prior}
+    if loss_name == "f_edl":
+        return {}
+    if loss_name == "daedl":
+        return {
+            "lam": float(getattr(cfg.loss, "lambda_value", 1.0)),
+            "anneal_epochs": float(getattr(cfg.loss, "anneal_epochs", 10.0)),
+        }
     raise ValueError(f"Unsupported loss.name: {loss_name}")
 
 
@@ -115,7 +122,10 @@ class FIEDLLightningModule(pl.LightningModule):
         if not self._shape_checked:
             self._assert_shapes(batch, out)
             self._shape_checked = True
-        loss_out = self.loss_fn(out["alpha"], y, epoch=float(self.current_epoch))
+        # Pass any extra head outputs (e.g. p, tau from FEDLHead) to the loss.
+        _HEAD_STANDARD = {"alpha", "probs", "logits", "evidence", "uncertainty_score"}
+        head_extras = {k: v for k, v in out.items() if k not in _HEAD_STANDARD}
+        loss_out = self.loss_fn(out["alpha"], y, epoch=float(self.current_epoch), **head_extras)
 
         pred = out["probs"].argmax(dim=1)
         acc = (pred == y).float().mean()
