@@ -1,4 +1,4 @@
-# FI-EDL
+# Fisher Information–based Evidential Deep Learning (FI-EDL)
 
 **English** | [한국어](README.ko.md)
 
