@@ -70,10 +70,7 @@ def _loss_kwargs(cfg) -> Dict[str, Any]:
     if loss_name == "f_edl":
         return {}
     if loss_name == "daedl":
-        return {
-            "lam": float(getattr(cfg.loss, "lambda_value", 1.0)),
-            "anneal_epochs": float(getattr(cfg.loss, "anneal_epochs", 10.0)),
-        }
+        return {"lam": float(getattr(cfg.loss, "lambda_value", 5e-2))}
     raise ValueError(f"Unsupported loss.name: {loss_name}")
 
 

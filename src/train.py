@@ -26,6 +26,37 @@ from src.registry.validators import validate_registry_bindings
 from src.reporting.collector import LocalCollector, _slug
 
 
+def _fit_and_save_daedl_gmm(model: FIEDLLightningModule, datamodule, best_ckpt_path: str) -> None:
+    """Extract backbone features from training set, fit GMM, re-save checkpoint.
+
+    Called after trainer.fit() when the head exposes fit_gmm().  The updated
+    checkpoint (with GMM buffers) is written back to best_ckpt_path so that
+    eval.py loads it transparently and applies density weighting automatically.
+    """
+    print("[DAEDL] Fitting class-conditional GMM on training features…")
+    device = model.device
+    model.eval()
+
+    all_feats: list = []
+    all_labels: list = []
+    with torch.no_grad():
+        for x, y in datamodule.train_dataloader():
+            feats = model.backbone(x.to(device))
+            all_feats.append(feats.cpu())
+            all_labels.append(y.cpu())
+
+    features = torch.cat(all_feats).to(device)
+    labels = torch.cat(all_labels).to(device)
+    model.head.fit_gmm(features, labels)
+    print(f"[DAEDL] GMM fitted on {features.size(0)} samples × {features.size(1)} dims.")
+
+    # Overwrite best checkpoint with GMM buffers included in state_dict.
+    raw = torch.load(best_ckpt_path, map_location=device, weights_only=False)
+    raw["state_dict"] = model.state_dict()
+    torch.save(raw, best_ckpt_path)
+    print(f"[DAEDL] Checkpoint updated with GMM: {best_ckpt_path}")
+
+
 def _find_resumable_run(cfg: DictConfig) -> Path | None:
     """Locate an interrupted train run for this (method, seed, dataset, backbone, variant).
 
@@ -211,6 +242,12 @@ def run_train(cfg: DictConfig) -> None:
     )
 
     trainer.fit(model, datamodule=datamodule, ckpt_path=resume_ckpt)
+
+    # DAEDL post-training GMM fitting: must happen before test so the
+    # checkpoint already contains the GMM when eval.py loads it.
+    if hasattr(model.head, "fit_gmm") and ckpt.best_model_path:
+        _fit_and_save_daedl_gmm(model, datamodule, ckpt.best_model_path)
+
     test_metrics = trainer.test(model, datamodule=datamodule, ckpt_path="best")
 
     metrics = test_metrics[0] if test_metrics else {}

@@ -1,8 +1,13 @@
 # @package _global_
-# DA-EDL: Distribution-Aware EDL (Yoon et al., ICML 2024).
-# Spectral normalisation + class-prototype density-weighted evidence.
-# NOTE: This uses a principled approximation of the density mechanism;
-#       validate against the official code when available.
+# DA-EDL: Density-Aware Evidential Deep Learning (Yoon et al., ICML 2024).
+# Official code: https://github.com/TaeseongYoon/DAEDL
+#
+# Algorithm:
+#   Phase 1 — training: alpha = 1e-6 + exp(SN_fc(features)), loss = MSE + 0.05*KL
+#   Phase 2 — post-training: fit class-conditional GMM on backbone features
+#   Inference: logit_weighted = logit * density_norm; alpha = 1e-6 + exp(logit_w)
+#
+# Backbone SN: the official code applies spectral norm to conv layers.
 
 experiment:
   name: daedl
@@ -10,8 +15,8 @@ experiment:
 
 model:
   head: daedl
+  backbone_spectral_norm: true   # official code applies SN to backbone conv layers
 
 loss:
   name: daedl
-  lambda_value: 1.0
-  anneal_epochs: 10
+  lambda_value: 0.05             # official default reg_param=5e-2, no annealing
