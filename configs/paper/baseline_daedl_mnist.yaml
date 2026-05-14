@@ -1,5 +1,6 @@
-# DA-EDL MNIST baseline: 5-seed comparison run.
-# Protocol matches main_mnist (ConvNet, 200 epochs, batch=64, lr=1e-3).
+# DA-EDL MNIST baseline — follows official DAEDL training protocol.
+# Official code: https://github.com/TaeseongYoon/DAEDL
+#   lr=1e-3, ExponentialLR(γ=0.95/epoch), 100 epochs, batch=64, ConvNet.
 
 methods: [daedl]
 seeds: [0, 1, 2, 3, 4]
@@ -7,11 +8,13 @@ run_eval: true
 overrides:
   - dataset=mnist
   - backbone=convnet
-  - trainer.max_epochs=200
+  - trainer.max_epochs=100
   - data.batch_size=64
   - data.val_from_train=true
   - data.val_split=0.2
   - optimizer.lr=0.001
+  - scheduler.name=exponentiallr
+  - scheduler.gamma=0.95
   - trainer.precision=32-true
   - trainer.early_stopping=true
   - trainer.early_stopping_monitor=val/loss

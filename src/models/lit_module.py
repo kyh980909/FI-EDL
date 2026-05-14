@@ -256,4 +256,10 @@ class FIEDLLightningModule(pl.LightningModule):
             gamma = float(getattr(self.cfg.scheduler, "gamma", 0.1))
             sched = torch.optim.lr_scheduler.StepLR(optim, step_size=step_size, gamma=gamma)
             return {"optimizer": optim, "lr_scheduler": sched}
+        if sched_name == "exponentiallr":
+            # Official DAEDL uses LambdaLR(lambda epoch: 0.95 ** epoch).
+            # ExponentialLR(gamma) is equivalent: lr_t = lr_0 * gamma^t.
+            gamma = float(getattr(self.cfg.scheduler, "gamma", 0.95))
+            sched = torch.optim.lr_scheduler.ExponentialLR(optim, gamma=gamma)
+            return {"optimizer": optim, "lr_scheduler": sched}
         raise ValueError(f"Unsupported scheduler.name: {self.cfg.scheduler.name}")
