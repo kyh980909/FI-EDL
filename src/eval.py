@@ -66,6 +66,19 @@ def _collect_outputs(
     }
 
 
+def _fisher_trace_np(alpha: np.ndarray) -> np.ndarray:
+    """Trace of the Dirichlet Fisher information (matches src/losses/fi_edl.py).
+
+    trace = Σ_c trigamma(α_c) − K·trigamma(α_0), where α_0 = Σ_c α_c.
+    Higher trace ↔ more epistemic uncertainty.
+    """
+    from scipy.special import polygamma
+
+    trigamma_alpha = polygamma(1, alpha)
+    trigamma_sum = polygamma(1, alpha.sum(axis=1, keepdims=True))
+    return (trigamma_alpha - trigamma_sum).sum(axis=1)
+
+
 def _score_map(alpha: np.ndarray, probs: np.ndarray) -> Dict[str, np.ndarray]:
     alpha0 = alpha.sum(axis=1)
     vacuity = alpha.shape[1] / np.clip(alpha0, 1e-12, None)
@@ -74,13 +87,16 @@ def _score_map(alpha: np.ndarray, probs: np.ndarray) -> Dict[str, np.ndarray]:
         "maxalpha": alpha.max(axis=1),
         "alpha0": alpha0,
         "vacuity": vacuity,
+        # Confidence-like: negative Fisher trace (higher => lower uncertainty),
+        # so it shares the orientation of maxp/maxalpha/alpha0.
+        "fisher": -_fisher_trace_np(alpha),
     }
 
 
 def _ood_score_from_raw(score_name: str, raw: np.ndarray) -> np.ndarray:
-    # Convention: higher => more OOD. `maxp` and `alpha0` are confidence-like,
-    # so we negate them. `vacuity` is already uncertainty-like.
-    if score_name in {"maxp", "alpha0"}:
+    # Convention: higher => more OOD. Confidence-like scores (`maxp`, `alpha0`,
+    # `fisher`) are negated; `vacuity` is already uncertainty-like.
+    if score_name in {"maxp", "alpha0", "fisher"}:
         return -raw
     return raw
 

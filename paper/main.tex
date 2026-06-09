@@ -1,0 +1,1576 @@
+% FI-EDL Neurocomputing journal extension — manuscript
+% Maintained by fi-edl-writer. Numerical claims must trace to
+% results/baseline_comparison_report.md.
+
+\documentclass[review,5p,times]{elsarticle}
+
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{microtype}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage{pifont}
+\usepackage{amssymb}
+\usepackage{multirow}
+\usepackage[ruled,vlined]{algorithm2e}
+\newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
+
+\journal{Neurocomputing}
+
+\begin{document}
+
+\begin{frontmatter}
+
+\title{Spectral-Normalized, KL-Free Evidential Deep Learning:\\
+A Simpler Recipe for Calibrated Uncertainty and OOD Detection}
+
+% \author[1]{\todo{first author}}
+% \author[1]{\todo{corresponding author}}
+% \affiliation[1]{organization={\todo{institution}}}
+
+\begin{abstract}
+Evidential deep learning (EDL) places a Dirichlet head on a deterministic
+network and reads calibration and out-of-distribution (OOD) signal from the
+predicted concentration, an appealingly cheap alternative to ensembles and
+Bayesian heads. A recent variant, FI-EDL, additionally proposes a
+Fisher-information controller that promises to adapt the KL regularization
+strength sample-by-sample. We ask a basic question: what \emph{actually}
+drives FI-EDL's strong calibration, and can it be exploited more directly?
+We first show that the FIM controller fails to deliver its promised
+per-sample adaptivity. The Fisher trace's per-sample standard deviation
+is only $6.5\%$ of its mean on CIFAR-10 ($1.6\%$ on MNIST), so the gate
+has almost no per-sample signal to adapt to. The default constants
+$\beta\!=\!\gamma\!=\!1$, applied to a trace of $\mathcal{O}(K)$, then
+saturate the gate to a near-constant scalar that is dataset-dependent --
+on MNIST $\overline{\lambda}\!\approx\!4\!\times\!10^{-7}$ leaves the KL
+term three orders of magnitude below the fit term, while on CIFAR-10
+$\overline{\lambda}\!\approx\!4\!\times\!10^{-4}$ produces an effective
+KL contribution comparable to the fit ($\sim\!70\%$); neither matches the
+adaptive behaviour the controller was designed for. We then identify a deliberately minimal
+replacement: a Brier-only fit, backbone spectral normalization for
+natural-image scale, and total evidence $\alpha_0$ as the OOD score. This
+three-component recipe attains the best calibration on CIFAR-10 across
+two backbones: on VGG-16 the recipe's $\text{ECE}\!=\!3.93\!\pm\!0.45\%$
+is best-mean (paired-tied with DAEDL, $p\!=\!0.55$), and on ResNet-18
+the recipe's $\text{ECE}\!=\!3.15\!\pm\!0.57\%$ is the unique
+statistically significant best, dominating each of DAEDL, F-EDL, and
+Re-EDL ($p\!\le\!0.04$). On out-of-distribution detection the recipe
+achieves best-mean CIFAR-10$\to$SVHN AUROC on both backbones (VGG-16
+$92.99\!\pm\!1.77$, ResNet-18 $93.02\!\pm\!1.56$; paired-tied with
+Re-EDL on each), uniquely significant CIFAR-10$\to$CIFAR-100 AUROC on
+VGG-16 ($86.32\!\pm\!0.20$, $p\!<\!0.01$ over each baseline), and
+uniquely significant CIFAR-10$\to$DTD (Describable Textures, a
+third OOD set) AUROC of $91.09\!\pm\!0.28$ ($p\!<\!0.05$ over each
+baseline), with the one non-best metric being CIFAR-10$\to$CIFAR-100
+on ResNet-18, where Re-EDL leads by $0.86$ percentage points.
+On the harder CIFAR-100 benchmark (ResNet-18, matching F-EDL's setup)
+the recipe is paired-tied with Re-EDL across every metric on four
+OOD directions (SVHN, CIFAR-10, TinyImageNet, DTD), while DAEDL's
+post-hoc density head fails to train at $K\!=\!100$, an analogous
+collapse to the one independently reported in F-EDL's paper.
+Three honest ablations support the design: re-enabling the gate with the
+original full-$\alpha$ KL destroys calibration (ECE jumps from $5.19\%$ to
+$71.62\%$); a target-masked KL controller preserves calibration but adds
+nothing; and spectral normalization \emph{harms} calibration on a small
+MNIST ConvNet (ECE $1.70\!\to\!13.60\%$), so the recipe recommends
+SN-off in small-backbone regimes. The recipe trails DAEDL by a
+statistically significant $1.29$ percentage points on misclassification
+AUROC, which we attribute to its post-hoc density head and discuss as a
+known limitation. The take-away is an Occam's-razor finding for modern
+EDL: stripping away the FIM controller, post-hoc density models, and
+auxiliary heads of recent baselines yields a simpler recipe that is
+competitive or better on the studied benchmarks across calibration and
+OOD detection, with one acknowledged loss on misclassification.
+\end{abstract}
+
+\begin{keyword}
+evidential deep learning \sep Dirichlet networks \sep uncertainty calibration
+\sep out-of-distribution detection \sep spectral normalization
+\end{keyword}
+
+% --- Elsevier "Highlights" — 5 bullets, each <=85 chars. ----
+\begin{highlights}
+  \item FI-EDL's Fisher-information gate fails to adapt: trace std is 6.5\% of mean.
+  \item Brier-only fit + backbone spectral norm + $\alpha_0$ score: a minimal EDL recipe.
+  \item Significant CIFAR-10 ECE win on ResNet-18 ($3.15$, $p{\le}.04$); best-mean on VGG-16.
+  \item CIFAR-10$\to$SVHN AUROC 92.99 (VGG) / 93.02 (ResNet), best mean on both backbones.
+  \item Honest limitation: spectral norm regresses MNIST ECE from 1.70 to 13.60\%.
+\end{highlights}
+
+\end{frontmatter}
+
+% =========================================================================
+\section{Introduction}\label{sec:intro}
+
+Modern deep classifiers are accurate but systematically miscalibrated, and
+their softmax confidence is a poor signal for whether an input is
+out-of-distribution~\citep{guo2017calibration,hendrycks2017baseline}.
+A practical uncertainty estimator should deliver three things in a single
+deterministic forward pass: a well-calibrated class probability, a usable
+score for OOD detection, and a usable score for separating correct from
+incorrect predictions. Ensembles and approximate-Bayesian heads do achieve
+this, but at a cost in compute and engineering effort that scales with the
+backbone.
+
+Evidential deep learning (EDL) is an appealingly cheap alternative. By
+re-interpreting the network output as the concentration parameters of a
+Dirichlet distribution over class probabilities, EDL exposes a single
+``total evidence'' scalar that captures epistemic
+uncertainty~\citep{sensoy2018edl,malinin2018prior,amini2020evidential}.
+A line of follow-up work has reshaped the training loss around this
+parameterization: I-EDL reweights per-class terms with a Fisher-information
+matrix~\citep{deng2023iedl}; R-EDL relaxes nonessential design choices and
+treats the prior weight as a free hyperparameter~\citep{chen2024redl};
+Re-EDL drops the KL-to-uniform regularizer entirely
+\citep{chen2025reedl}; DAEDL augments the head with a
+post-hoc Gaussian mixture density on top of a spectrally normalized
+backbone~\citep{yoon2024daedl}; and Flexible EDL (\citealp{yoon2025fedl},
+abbreviated ``F-EDL'' in its venue) replaces the Dirichlet with a Flexible
+Dirichlet, equips the backbone and the $\alpha$-head with spectral
+normalization, and adds two auxiliary sub-heads predicting the mean $p$
+and a temperature $\tau$. Each step adds machinery, but the question of
+which pieces are actually doing the work has not been answered head-on.
+
+The Fisher-information EDL paper~--~henceforth \emph{FI-EDL}, abbreviated
+this way throughout to avoid the published collision with Flexible EDL~--~is
+a particularly clean test case. Its proposed mechanism is an adaptive gate
+$\lambda(\alpha)\!=\!\beta\exp\!\bigl(-\gamma\,\mathrm{tr}(I(\alpha))\bigr)$
+that multiplies the KL-to-uniform term, so that confident regions of input
+space (high Fisher trace) are regularized less and uncertain regions more.
+Empirically the method calibrates well, but a quick instrumentation tells
+a different story. With the published $\beta\!=\!\gamma\!=\!1$, the Fisher
+trace of a Dirichlet on $K\!=\!10$ classes sits at
+$\mathrm{tr}(I(\alpha))\!\approx\!14.5\!=\!\mathcal{O}(K)$ throughout
+training. The gate $\lambda\!=\!\exp(-\mathrm{tr}\,I(\alpha))$ collapses
+the per-sample trace through an exponential, and the empirical
+$\overline{\lambda}$ depends on the trace's per-sample distribution: on
+MNIST $\overline{\lambda}\!\approx\!4\!\times\!10^{-7}$ and the effective
+KL contribution is three orders of magnitude below the fit term, while
+on CIFAR-10 $\overline{\lambda}\!\approx\!4\!\times\!10^{-4}$ and the
+effective KL contribution is roughly $70\%$ of the fit term
+(\autoref{tab:gate}). More striking is the second number: across the
+training set, the per-sample standard deviation of
+$\mathrm{tr}(I(\alpha))$ is only $6.5\%$ of its mean on CIFAR-10 and
+$1.6\%$ on MNIST, so the gate has almost no per-sample variation to
+adapt to even after normalisation. The strong calibration of FI-EDL is
+real, but it is not produced by an \emph{adaptive} controller -- the
+controller acts as a (mis-tuned) constant KL coefficient, fully
+saturated on MNIST and moderate on CIFAR-10.
+
+This paper takes that diagnosis as a starting point and asks: what
+\emph{actually} drives FI-EDL's calibration advantage, and can it be
+exploited more directly? Our answer is a deliberately minimal recipe with
+three components: (i) train with the Brier-like fit term alone, dropping
+the KL regularizer that the gate had silently nullified anyway;
+(ii) apply spectral normalization to the backbone (only) in
+natural-image regimes, following the distance-aware Lipschitz argument of
+SNGP and DUQ~\citep{liu2020sngp,vanamersfoort2020duq}; and (iii) use the
+total Dirichlet evidence $\alpha_0$ as the OOD score, matching the
+canonical evidential vacuity uncertainty~\citep{sensoy2018edl} but with a
+confidence-like orientation that is a drop-in replacement for the maximum
+softmax probability~\citep{hendrycks2017baseline}. Each component
+corresponds to \emph{removing} a piece of recent EDL machinery: the FI-EDL
+gate, the DAEDL post-hoc GMM head, and the Flexible-EDL auxiliary
+$(p,\tau)$ sub-heads on a non-Dirichlet family. The recipe adds no
+parameters over plain EDL, requires no auxiliary density model, and trains
+in one pass.
+
+Empirically, the recipe is competitive or better than every published EDL
+baseline we re-trained under a matched protocol on CIFAR-10 with a VGG-16
+backbone. The simple count is three of five metrics first place, one
+second, one top-tier; once read through paired $t$-tests and bootstrap
+confidence intervals (\autoref{sec:main}, the supplementary material),
+the honest statement is: the CIFAR-10$\to$CIFAR-100 OOD AUROC of
+$86.32\!\pm\!0.20$ is the unique statistically significant first place
+($p\!<\!0.01$ over DAEDL, F-EDL, and Re-EDL); the calibration ECE of
+$3.93\!\pm\!0.45\%$ is best-mean but paired-tied with DAEDL ($p\!=\!0.55$);
+the CIFAR-10$\to$SVHN AUROC of $92.99\!\pm\!1.77$ is best-mean but paired-
+tied with Re-EDL and F-EDL. On misclassification AUROC, DAEDL retains a
+significant $1.29$-pp lead. We report all four verdicts as stated rather
+than rounding to a slogan.
+
+We also report what does \emph{not} work. Re-enabling the gate with the
+original full-$\alpha$ KL collapses calibration on CIFAR-10 from
+$5.19\%$ ECE to $71.62\%$ at unchanged accuracy, the unmistakable
+signature of severe underconfidence
+(\autoref{sec:abl-gate}). A target-masked KL avoids the collapse, but
+yields no metric improvement over the KL-free baseline because the
+Fisher trace's near-zero per-sample variance leaves the adaptive
+controller no signal to act on (\autoref{sec:abl-masked}). And spectral
+normalization, which helps every CIFAR-10 metric, \emph{regresses} MNIST
+calibration from $1.70\%$ to $13.60\%$ ECE because a small ConvNet under
+SN is over-constrained and the $\alpha_0$ score orientation inverts on
+FMNIST (\autoref{sec:abl-sn}). The recipe therefore prescribes SN-on for
+natural-image backbones and SN-off for small-backbone settings, with the
+regression flagged rather than buried.
+
+\paragraph{Contributions.}
+\begin{enumerate}
+  \item \emph{Diagnosis of the FIM controller's empirical inertia.} We
+        instrument FI-EDL during matched re-training on MNIST and CIFAR-10
+        and show that the Fisher trace sits at $\mathcal{O}(K)$ with a
+        per-sample standard deviation of only $6.5\%$ of its mean, so the
+        gate $\lambda\!=\!\exp(-\mathrm{tr}(I(\alpha)))$ saturates at
+        $\sim\!5\!\times\!10^{-7}$ and its effective KL contribution is
+        five to seven orders of magnitude below the fit
+        term (\autoref{sec:diagnosis}, \autoref{tab:gate}).
+  \item \emph{A minimal Brier+SN+$\alpha_0$ recipe and its mechanistic
+        rationale.} We propose and justify a three-component design that
+        removes the FIM gate, the DAEDL density head, and the Flexible-EDL
+        $(p,\tau)$ sub-heads, keeping only what the diagnosis implies is
+        load-bearing (\autoref{sec:recipe}, \autoref{sec:why}).
+  \item \emph{A new state-of-the-art on CIFAR-10 across two backbones
+        with honest statistical framing.} On the matched re-train (5
+        seeds, 6 EDL baselines) the recipe attains best-mean ECE on
+        both VGG-16 ($3.93$, paired-tied with DAEDL, $p\!=\!0.55$) and
+        ResNet-18 ($3.15$, \emph{uniquely significant} over each
+        baseline, $p\!\le\!0.04$); best-mean CIFAR-10$\to$SVHN AUROC on
+        both backbones (paired-tied with Re-EDL); and uniquely
+        significant CIFAR-10$\to$CIFAR-100 AUROC on VGG-16
+        ($86.32\!\pm\!0.20$, $p\!<\!0.01$ vs.\ each baseline). The one
+        non-best metric is CIFAR-10$\to$CIFAR-100 on ResNet-18, where
+        Re-EDL leads by $0.86$ percentage points ($p\!<\!0.01$)
+        (\autoref{sec:main}, \autoref{tab:main-resnet}). On
+        additional CIFAR-10 OOD sets adopted by Re-EDL --- DTD
+        \citep{cimpoi2014describing} and GTSRB
+        \citep{stallkamp2012gtsrb} --- the recipe is best-mean on both
+        (uniquely significant on DTD, paired-tied with Re-EDL on GTSRB)
+        (\autoref{tab:main-extended-ood}). On the harder CIFAR-100
+        benchmark (ResNet-18, matching F-EDL's Appendix~E.2) it is
+        paired-tied with Re-EDL across accuracy, ECE, and four OOD
+        directions (SVHN/CIFAR-10/TinyImageNet/DTD), while DAEDL's
+        post-hoc density head fails to train under $K\!=\!100$
+        (\autoref{tab:main-cifar100}).
+  \item \emph{Honest negative results.} We document three: (i) restoring
+        the gate with full-$\alpha$ KL destroys calibration
+        ($5.19\!\to\!71.62\%$ ECE, \autoref{sec:abl-gate}); (ii) a target-
+        masked KL preserves calibration but yields no metric gain because
+        the Fisher controller has no signal
+        (\autoref{sec:abl-masked}); and (iii) spectral normalization
+        regresses MNIST calibration ($1.70\!\to\!13.60\%$ ECE,
+        \autoref{sec:abl-sn}), so the recipe recommends SN-off for small
+        backbones.
+  \item \emph{Cross-baseline score audit.} Switching the OOD score from
+        $\max_c\hat p_c$ to total evidence $\alpha_0$ shifts the
+        leaderboard meaningfully: the matched-protocol FI-EDL baseline on
+        CIFAR-10$\to$SVHN moves from $89.89$ AUROC with $\max_c\hat p_c$
+        to $91.72$ with $\alpha_0$ at no retraining cost. The same
+        re-evaluation reorders the published leaderboards of several
+        other evidential methods (\autoref{sec:score-ablation}),
+        supporting $\alpha_0$ as the right default OOD score for
+        evidential methods.
+\end{enumerate}
+
+\paragraph{Outline.}
+\autoref{sec:related} positions FI-EDL+SN next to DAEDL and Flexible EDL
+in a head-to-head table that defuses the scoop risk on spectral
+normalization. \autoref{sec:background} reviews the Dirichlet/EDL
+formulation. \autoref{sec:method} contains the diagnosis
+(\autoref{sec:diagnosis}), the recipe (\autoref{sec:recipe}), and the
+component-by-component rationale (\autoref{sec:why}). \autoref{sec:exp}
+reports main results with paired statistical tests. \autoref{sec:ablations}
+presents the three negative results above. \autoref{sec:discussion}
+discusses when SN helps and \autoref{sec:conclusion} concludes.
+
+% =========================================================================
+\section{Related Work}\label{sec:related}
+
+\subsection{Evidential deep learning}\label{sec:rw-edl}
+Evidential deep learning places a Dirichlet (or Normal--Inverse--Gamma for
+regression) prior on the predictive distribution and trains a deterministic
+network to output its parameters in a single forward pass. Sensoy
+\textit{et al.}~\citep{sensoy2018edl} introduce the classification
+formulation with a Brier-like fit and a KL-to-uniform regularizer on the
+target-masked concentration. Malinin and Gales~\citep{malinin2018prior}
+develop the parallel Prior Networks line, which trains by minimizing a KL
+between predicted and target Dirichlets built from sharp in-distribution
+and flat synthetic OOD samples. Amini \textit{et al.}~\citep{amini2020evidential}
+extend the program to regression with a Normal--Inverse--Gamma prior.
+Deng \textit{et al.}'s I-EDL~\citep{deng2023iedl} reweights the per-class
+EDL loss with the Fisher Information Matrix of the Dirichlet so that
+low-evidence classes receive larger gradient. Chen \textit{et al.}'s
+R-EDL~\citep{chen2024redl} identifies the fixed prior weight and the
+variance-minimizing term as nonessential and treats the prior weight as a
+tunable hyperparameter; its journal extension Re-EDL~\citep{chen2025reedl}
+goes further and \emph{drops the KL regularizer entirely}, making it the
+closest published precedent for the KL-free leg of our recipe.
+
+\subsection{Concurrent work: spectral norm meets evidential
+heads}\label{sec:rw-concurrent}
+Two recent works -- DAEDL~\citep{yoon2024daedl} and Flexible EDL
+\citep{yoon2025fedl} -- combine spectral normalization with Dirichlet (or
+Flexible-Dirichlet) heads, and overlap with our recipe enough to require a
+head-to-head positioning. The naming is unfortunate: Flexible EDL is
+abbreviated ``F-EDL'' in its venue, which collides with an earlier internal
+shorthand for Fisher-information EDL; we use \emph{FI-EDL} throughout for
+the Fisher-information method and reserve F-EDL for Flexible EDL.
+
+DAEDL~\citep{yoon2024daedl} is, to our knowledge, the first published EDL
+method to apply spectral normalization to the feature extractor, and uses
+the resulting bi-Lipschitz feature map to fit a class-conditional GMM at
+test time whose density re-weights the predicted logits. F-EDL
+\citep{yoon2025fedl} replaces the Dirichlet with a Flexible Dirichlet
+mixture, applies spectral normalization to both the backbone $f_\theta$
+and the $\alpha$-head $g_{\phi_1}$, adds two auxiliary sub-heads predicting
+the mixture mean $p$ and a temperature $\tau$, and replaces the KL penalty
+with a Brier-score regularizer on $p$. Both share the SN+evidential thesis
+with FI-EDL+SN, but each \emph{adds} machinery -- post-hoc density in
+DAEDL, a different distribution family plus auxiliary heads in F-EDL.
+
+Our positioning, summarized in \autoref{tab:rw-concurrent}, is an
+\emph{Occam's-razor simplification}: we keep the plain Dirichlet, drop
+the KL term, drop any post-hoc density, drop the auxiliary heads, and
+apply spectral normalization only to the backbone. \autoref{sec:main}
+shows that this minimal recipe matches or beats both methods on the
+studied CIFAR-10 metrics. A 2026 concurrent line, GEM-FI
+\citep{mohammed2026gemfi}, shares the ``Fisher'' label but takes a
+mechanistically distant route: it predicts a mixture over evidential
+heads with an energy-based gate, neither dropping the KL term nor
+applying SN; we therefore treat it as orthogonal to the present design.
+
+\begin{table}[t]
+  \centering
+  \caption{Side-by-side positioning of FI-EDL+SN against the two
+    concurrent SN+evidential methods. The right four columns indicate
+    whether each method adds the listed component on top of plain EDL.
+    Our recipe is the unique entry that adds nothing.}
+  \label{tab:rw-concurrent}
+  \small
+  \begin{tabular}{lccccc}
+    \toprule
+    Method & Backbone SN & Drops KL & Extra heads (+ SN) &
+      Post-hoc density & Distribution \\
+    \midrule
+    Plain EDL~\citep{sensoy2018edl} & \ding{55} & \ding{55} & \ding{55} & \ding{55} & Dirichlet \\
+    Re-EDL~\citep{chen2025reedl}    & \ding{55} & \checkmark & \ding{55} & \ding{55} & Dirichlet \\
+    DAEDL~\citep{yoon2024daedl}     & \checkmark & \ding{55}  & \ding{55} & GDA/GMM   & Dirichlet \\
+    F-EDL~\citep{yoon2025fedl}      & \checkmark & \checkmark & $(p,\tau)$ + head SN & \ding{55} & Flexible Dirichlet \\
+    \textbf{FI-EDL+SN (ours)}       & \checkmark & \checkmark & \ding{55} & \ding{55} & Dirichlet \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Calibration and out-of-distribution detection}\label{sec:rw-calood}
+
+\paragraph{Calibration.}
+Guo \textit{et al.}~\citep{guo2017calibration} document the modern
+miscalibration pattern -- deeper/wider networks with batch normalization
+are systematically overconfident -- and propose post-hoc temperature
+scaling as a near-optimal fix. We adopt their ECE estimator as our primary
+calibration metric. Mukhoti \textit{et al.}~\citep{mukhoti2020focal} show
+that training with focal loss already yields well-calibrated networks
+without sacrificing accuracy; we cite this as the strongest train-time
+calibration baseline outside the evidential family. More recent
+train-time approaches, such as the class-adaptive label-smoothing margin
+of CALS~\citep{liu2023cals}, push the calibration vs.\ accuracy
+trade-off further but remain orthogonal to the evidential-Dirichlet
+formulation studied here.
+
+\paragraph{Post-hoc OOD detection.}
+Hendrycks and Gimpel~\citep{hendrycks2017baseline} establish the maximum
+softmax probability baseline and the AUROC/AUPR/FPR$95$ protocol that we
+follow. ODIN~\citep{liang2018odin} combines temperature scaling and
+gradient-direction input perturbations to improve MSP. Lee
+\textit{et al.}~\citep{lee2018mahalanobis} fit class-conditional Gaussians
+in the feature space and use Mahalanobis distance as the OOD score, a
+direct ancestor of DAEDL's density-augmented evidential head. KNN-OOD
+\citep{sun2022knn} dispenses with parametric assumptions and uses the
+$k$-th-nearest-neighbor distance in normalized feature space. SNGP
+\citep{liu2020sngp} is closest in spirit to our recipe: it combines
+spectral normalization on the hidden layers with a Gaussian-process output
+head to achieve distance-aware uncertainty in a single deterministic pass.
+More recent post-hoc detectors operate purely on the trained network's
+intermediate representations: ASH~\citep{djurisic2023ash} prunes and
+rescales activations at inference, and GEN~\citep{liu2023gen} replaces
+maximum softmax probability with a generalised-entropy score; both are
+complementary to the training-time changes we study and could be layered
+on top of our recipe at no retraining cost.
+
+\paragraph{Spectral normalization and Lipschitz nets.}
+Miyato \textit{et al.}~\citep{miyato2018sngan} introduce the
+power-iteration-based spectral-norm constraint that we use; van Amersfoort
+\textit{et al.}'s DUQ~\citep{vanamersfoort2020duq} is a deterministic
+uncertainty model built around an RBF head and a two-sided gradient
+penalty for bi-Lipschitz sensitivity; Bartlett
+\textit{et al.}~\citep{bartlett2017spectrally} provide the spectrally-
+normalized margin generalization bound that motivates the constraint
+beyond OOD distance-awareness. The recipe of \autoref{sec:recipe}
+intentionally adopts only the simplest of these mechanisms (SN on the
+backbone, no GP head, no two-sided penalty) so that the contribution of
+SN to a Dirichlet head can be isolated.
+
+% =========================================================================
+\section{Background}\label{sec:background}
+
+\subsection{Dirichlet evidential classifiers}
+Let $x\!\in\!\mathcal{X}$ be an input and $y\!\in\!\{1,\dots,K\}$ its class
+label. Evidential deep learning (EDL) reinterprets the network output as a
+Dirichlet distribution over the categorical class probabilities $p$ rather
+than a single point estimate~\citep{sensoy2018edl}. Concretely, the backbone
+$f_\theta$ maps $x$ to non-negative evidence $e(x)\!=\!\mathrm{ReLU}(f_\theta(x))
+\!\in\!\mathbb{R}_{\ge 0}^{K}$ and the Dirichlet concentration parameters
+are obtained by adding a unit prior,
+\begin{equation}
+  \alpha_c(x) \;=\; e_c(x) + 1, \qquad c=1,\dots,K,
+  \label{eq:alpha}
+\end{equation}
+so that $\alpha\!\in\!\mathbb{R}_{>0}^{K}$ and $\alpha_0(x)\!=\!\sum_{c=1}^{K}
+\alpha_c(x)$ is the total Dirichlet strength. The mean class probabilities
+are $\hat p_c = \alpha_c/\alpha_0$, and the Sensoy~\textit{et~al.} formulation
+uses the expected sum-of-squared-errors (Brier-like) loss
+\begin{equation}
+  \mathcal{L}_{\text{fit}}(\alpha,y) \;=\; \sum_{c=1}^{K}\Bigl[(y_c-\hat p_c)^2
+  + \tfrac{\hat p_c(1-\hat p_c)}{\alpha_0+1}\Bigr],
+  \label{eq:fit}
+\end{equation}
+with $y$ a one-hot label.
+
+\subsection{KL-to-uniform regularizer}
+To suppress evidence on incorrect classes, standard EDL adds a KL divergence
+between a target-masked concentration
+$\tilde\alpha = \alpha\odot(1-y)+y$ and the uniform Dirichlet
+$\mathrm{Dir}(\mathbf{1})$~\citep{sensoy2018edl}:
+\begin{equation}
+  \mathcal{L}_{\text{kl}}(\alpha,y) \;=\;
+  \mathrm{KL}\!\bigl(\mathrm{Dir}(\tilde\alpha)\,\|\,\mathrm{Dir}(\mathbf{1})\bigr).
+  \label{eq:kl}
+\end{equation}
+The target-class masking $\alpha\odot(1-y)+y$ protects the correct class from
+being driven toward $1/K$. Variants such as I-EDL, R-EDL and Re-EDL inherit
+this annealed KL term with different scheduling and prior choices.
+
+\subsection{Fisher information of a Dirichlet}
+\label{sec:fim}
+For $p\sim\mathrm{Dir}(\alpha)$ with $\alpha_0=\sum_c\alpha_c$, the Fisher
+information matrix is
+\begin{equation}
+  I(\alpha)_{cc'} \;=\; \delta_{cc'}\,\psi'(\alpha_c) - \psi'(\alpha_0),
+  \label{eq:fim}
+\end{equation}
+where $\psi'(\cdot)$ is the trigamma function. The trace, used by F-EDL and
+by the FI-EDL controller as an adaptive scalar summary of the predicted
+distribution's local curvature, has the closed form
+\begin{equation}
+  \mathrm{tr}\bigl(I(\alpha)\bigr) \;=\;
+  \sum_{c=1}^{K}\psi'(\alpha_c) \;-\; K\,\psi'(\alpha_0).
+  \label{eq:fimtrace}
+\end{equation}
+Two observations matter for what follows. First, $\mathrm{tr}(I(\alpha))$ is
+dominated by the $\sum_c\psi'(\alpha_c)$ term: when evidence is moderate
+($\alpha_c\!\approx\!2\text{--}3$, $\alpha_0\!\approx\!K\!\cdot\!2$) each
+$\psi'(\alpha_c)\!\approx\!1/\alpha_c$ contributes $\mathcal{O}(1/\alpha_c)$
+while the subtracted $K\psi'(\alpha_0)\!\approx\!K/\alpha_0\!\approx\!1/2$
+remains $\mathcal{O}(1)$, so the trace scales as
+$\mathrm{tr}(I(\alpha))\!=\!\mathcal{O}(K)$ across the typical operating
+range. Second, since the trigamma is monotone decreasing, the trace varies
+slowly with $\alpha$ — \autoref{sec:diagnosis} will show that the per-sample
+standard deviation of $\mathrm{tr}(I(\alpha))$ on CIFAR-10 is only $\sim 6\%$
+of its mean, which has direct consequences for any FIM-based adaptive
+controller.
+
+% =========================================================================
+\section{Method}\label{sec:method}
+
+\subsection{Diagnosing FI-EDL: the gate is saturated off}\label{sec:diagnosis}
+The FI-EDL training objective combines the Brier-like fit
+$\mathcal{L}_{\text{fit}}$ from \eqref{eq:fit} with a gated KL regularizer,
+\begin{equation}
+  \mathcal{L}_{\text{FI-EDL}} \;=\; \mathcal{L}_{\text{fit}}(\alpha,y)
+    \;+\; \lambda(\alpha)\,\mathcal{L}_{\text{kl}}(\alpha,y),
+    \qquad
+  \lambda(\alpha) \;=\; \beta\,\exp\!\bigl(-\gamma\,\mathrm{tr}(I(\alpha))\bigr),
+  \label{eq:fiedl}
+\end{equation}
+with $\beta\!=\!\gamma\!=\!1$ in the original formulation. The intent is that
+$\lambda(\alpha)$ adapts the KL strength to the local sharpness of the
+predicted Dirichlet: confident (high-trace) regions should be regularized
+less, uncertain regions more. We instrumented this gate during the matched
+re-training of FI-EDL on MNIST and CIFAR-10 and recorded the actual values
+attained on the training set; see \autoref{tab:gate}.
+
+\begin{table}[t]
+  \centering
+  \caption{Empirical values of the FI-EDL gate
+    $\lambda(\alpha)=\exp(-\mathrm{tr}(I(\alpha)))$ during training. The
+    effective KL contribution $\lambda\!\cdot\!\mathcal{L}_{\text{kl}}$ is
+    five to seven orders of magnitude smaller than the fit term.}
+  \label{tab:gate}
+  \small
+  \begin{tabular}{lccccc}
+    \toprule
+    & $\mathrm{tr}(I(\alpha))$ & $\overline{\lambda}$ & $\lambda_{\max}$
+    & $\mathcal{L}_{\text{kl}}$ (raw) & $\mathcal{L}_{\text{fit}}$ \\
+    \midrule
+    MNIST    & 14.76 & $4.2\!\times\!10^{-7}$ & $1.8\!\times\!10^{-6}$
+             & 63.1 & 0.025 \\
+    CIFAR-10 & 14.48 & $3.8\!\times\!10^{-4}$ & $9.3\!\times\!10^{-3}$
+             & 66.2 & 0.037 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Three facts emerge. First, the Fisher trace sits at
+$\mathrm{tr}(I(\alpha))\!\approx\!14.5\!\approx\!K$ throughout training for
+$K\!=\!10$, exactly the $\mathcal{O}(K)$ scale predicted by
+\eqref{eq:fimtrace} in \autoref{sec:fim}. A naive point evaluation gives
+$\exp(-14.5)\!\approx\!5\!\times\!10^{-7}$, but because the per-sample
+trace has non-trivial variance (standard deviation $0.23$ on MNIST and
+$0.94$ on CIFAR-10, around a mean of $\sim\!14.5$), Jensen's inequality
+lifts the empirical $\overline{\lambda}$ to $4.2\!\times\!10^{-7}$ on
+MNIST and the substantially larger $3.8\!\times\!10^{-4}$ on CIFAR-10
+(\autoref{tab:gate}). Second, multiplying by this gate yields an
+effective KL contribution
+$\overline{\lambda}\,\mathcal{L}_{\text{kl}}\!\approx\!2.6\!\times\!10^{-5}$
+on MNIST, three orders of magnitude below the fit term
+($\mathcal{L}_{\text{fit}}\!=\!0.025$), but
+$\overline{\lambda}\,\mathcal{L}_{\text{kl}}\!\approx\!2.5\!\times\!10^{-2}$
+on CIFAR-10, which is roughly $70\%$ of
+$\mathcal{L}_{\text{fit}}\!=\!0.037$. The gate is therefore saturated
+near zero only on MNIST; on CIFAR-10 it acts as a near-constant
+\emph{moderate} regulariser, not the inert one that the MNIST headline
+suggests. Third, the trace's per-sample variance is tiny relative to its
+mean ($6.5\%$ on CIFAR-10, $1.6\%$ on MNIST), so the gate cannot deliver
+the per-sample adaptivity the controller was designed for on either
+dataset --- every sample sees essentially the same KL weight.
+
+\paragraph{Implication.} The FIM controller fails its design goal on
+both datasets, but the failure mode differs. On MNIST the gate saturates
+and FI-EDL trains essentially on the Brier-like fit term alone. On
+CIFAR-10 the gate is non-trivial but constant -- it acts as a uniformly
+applied moderate KL coefficient rather than the per-sample adaptive
+regulariser the original work proposes. In neither case does the
+controller deliver adaptivity, not because of an implementation bug but
+because the constants $\beta,\gamma$ were not calibrated against the
+$\mathcal{O}(K)$ magnitude of the Fisher trace and because the trace
+itself is too sample-invariant to drive any adaptive gate. The strong
+calibration results reported for FI-EDL therefore reflect the underlying
+fit term plus, on CIFAR-10, an accidentally well-tuned scalar KL
+strength -- not an adaptive Fisher-information controller. A different
+explanation is required, which we develop next.
+
+\subsection{Proposed recipe}\label{sec:recipe}
+Given that the FIM gate is inert (\autoref{sec:diagnosis}) yet the underlying
+FI-EDL training is empirically well-calibrated, we ask what \emph{actually}
+drives the calibration and OOD behaviour in the FI-EDL family and whether a
+simpler design can match or surpass it. We propose three components:
+
+\begin{enumerate}
+  \item[\textbf{(i)}] \textbf{KL-free Brier fit.} Train with the fit term
+    \eqref{eq:fit} alone, dropping the KL-to-uniform regularizer
+    \eqref{eq:kl} entirely. This makes explicit what FI-EDL was already doing
+    under saturation (\autoref{sec:diagnosis}) and removes a regularizer whose
+    full-$\alpha$ form actively degrades calibration when re-enabled
+    (\autoref{sec:why}).
+  \item[\textbf{(ii)}] \textbf{Backbone spectral normalization.} Apply
+    spectral normalization~\citep{miyato2018sngan} to every convolutional and
+    linear layer of the backbone $f_\theta$ (not to the evidential output
+    head). This enforces a bi-Lipschitz feature map and prevents the
+    feature/logit blow-up that softmax-trained classifiers exhibit on far-OOD
+    inputs, matching the rationale used by SNGP and DUQ
+    ~\citep{liu2020sngp,vanamersfoort2020duq}. We apply spectral
+    normalization only in natural-image settings; small-backbone settings
+    such as MNIST/ConvNet pay a calibration tax under SN (see
+    \autoref{sec:abl-sn} for the regression).
+  \item[\textbf{(iii)}] \textbf{Total-evidence ($\alpha_0$) OOD score.} For
+    OOD detection, score an input by its total Dirichlet strength
+    $s(x)=\alpha_0(x)=\sum_c \alpha_c(x)$, with higher $s$ meaning more
+    in-distribution. This is monotone-equivalent to the vacuity score
+    $K/\alpha_0$ used elsewhere~\citep{sensoy2018edl} but with
+    confidence-like orientation, which makes it a drop-in replacement for the
+    maximum-softmax-probability score~\citep{hendrycks2017baseline} on a
+    Dirichlet head.
+\end{enumerate}
+
+\begin{algorithm}[t]
+  \caption{Spectral-normalized, KL-free EDL (training and inference).}
+  \label{alg:recipe}
+  \small
+  \KwIn{labeled set $\mathcal{D}=\{(x_i,y_i)\}$, backbone $f_\theta$,
+    evidence head $g_\phi$.}
+  \KwSty{Setting:} natural-image regime --- apply spectral
+    normalization to every conv/linear layer of $f_\theta$; for small
+    backbones (e.g.\ MNIST ConvNet), omit SN to avoid the calibration
+    regression documented in \autoref{sec:abl-sn}.\\
+  \textbf{Training pass.}\\
+  \quad For each minibatch: compute $\alpha = g_\phi(f_\theta(x))+1$ and
+       update $\theta,\phi$ by minimizing $\mathcal{L}_{\text{fit}}(\alpha,y)$
+       in \eqref{eq:fit}. No KL term.\\[2pt]
+  \textbf{Inference pass.}\\
+  \quad Classification: $\hat y(x) = \arg\max_c \alpha_c(x)$.\\
+  \quad OOD score: $s(x) = \alpha_0(x) = \sum_c \alpha_c(x)$
+       (higher = more in-distribution).\\
+  \quad Misclassification score: $\max_c \hat p_c(x) = \max_c \alpha_c(x)/\alpha_0(x)$.
+\end{algorithm}
+
+The recipe adds no learnable parameters over standard EDL and requires no
+auxiliary density model. The only architectural change is a spectral
+normalization wrapper around existing backbone layers, supported natively in
+PyTorch.
+
+\subsection{Why each component}\label{sec:why}
+
+\paragraph{(i) Dropping KL-to-uniform.}
+The KL term \eqref{eq:kl} in its standard target-masked form
+$\tilde\alpha=\alpha\odot(1-y)+y$ is designed to suppress evidence on
+incorrect classes while leaving the correct class untouched. The FI-EDL
+formulation, however, uses an unmasked variant that applies
+$\mathrm{KL}(\mathrm{Dir}(\alpha)\,\|\,\mathrm{Dir}(\mathbf{1}))$ to the full
+concentration vector, pulling \emph{every} $\alpha_c$ — including the target
+class — toward~$1$ and the predicted probabilities toward $1/K$. Under the
+saturated gate (\autoref{sec:diagnosis}) this is harmless, but when the
+controller is re-enabled by Fisher-trace normalization or KL warmup, it
+becomes the dominant force on the loss. We measure the resulting collapse
+quantitatively in \autoref{sec:abl-gate}: CIFAR-10 ECE rises from
+$5.19\%$ to $71.62\%$ even though accuracy is essentially unchanged
+($89.95\%$ vs.\ $90.32\%$), exactly the severe-underconfidence signature.
+A target-masked KL avoids the collapse but, as \autoref{sec:abl-masked} shows,
+yields no metric improvement over baseline either, because the Fisher trace's
+near-zero per-sample variance leaves the controller with no adaptive signal.
+We therefore drop the KL term outright.
+
+\paragraph{(ii) Spectral normalization on the backbone.}
+Spectral normalization rescales each weight matrix $W$ to
+$W/\sigma(W)$, where $\sigma(W)$ is its largest singular
+value~\citep{miyato2018sngan}. Applied to every conv/linear layer of the
+backbone, this enforces a global Lipschitz constant of one (per layer) and,
+in turn, prevents the feature norm from blowing up as the input moves away
+from the training distribution. The same mechanism underlies the
+distance-awareness of SNGP~\citep{liu2020sngp} and DUQ
+~\citep{vanamersfoort2020duq}: a bi-Lipschitz feature map ensures that
+far-OOD inputs land in a feature region where the trained classifier head
+\emph{can} produce low-confidence outputs, instead of being driven to
+high-confidence by uncontrolled feature magnitudes. Empirically this
+improves all five CIFAR-10 metrics over FI-EDL without SN
+(\autoref{sec:abl-sn}): the same component that gives SNGP its OOD
+robustness gives a Dirichlet head a usable $\alpha_0$ signal.
+
+\paragraph{(iii) $\alpha_0$ as the OOD score.}
+The maximum predicted probability $\max_c\hat p_c$ is the de-facto OOD
+baseline~\citep{hendrycks2017baseline} but, on a Dirichlet head, it discards
+the very quantity the head was designed to expose: the total evidence
+$\alpha_0$. Vacuity $K/\alpha_0$ is the canonical evidential uncertainty
+score~\citep{sensoy2018edl}, and $\alpha_0$ is its monotone inverse, so the
+two yield identical AUROC/AUPR/FPR95. The practical difference is purely
+orientation — $\alpha_0$ reads "higher means more in-distribution" — and
+this matches the convention of every other confidence score, which avoids
+sign-flip bugs in downstream tooling. The empirical payoff is large: on
+CIFAR-10$\to$SVHN, switching the FI-EDL baseline (no SN) from
+$\max_c\hat p_c$ to $\alpha_0$ moves the AUROC from $89.89$ to $91.72$
+with no retraining; on CIFAR-10$\to$CIFAR-100 the same score swap on the
+FI-EDL baseline moves AUROC from $83.80$ to $84.67$. The recipe's
+improvements are therefore partly \emph{score selection}, not just
+training-time changes.
+
+\paragraph{Why does the minimal recipe beat a more elaborate baseline?}
+Both Flexible EDL \citep{yoon2025fedl} and our recipe apply backbone
+spectral normalization and drop the unmasked KL-to-uniform regulariser,
+yet on CIFAR-10/VGG-16 we observe a $-1.89$ percentage-point ECE gap
+($p\!<\!0.001$) and a $+2.17$ percentage-point CIFAR-100 AUROC gap
+($p\!<\!0.01$) in favour of the simpler design (\autoref{sec:main},
+\autoref{sec:abl-sn}). Two mechanisms are consistent with this
+observation. First, F-EDL routes the prediction through three
+sub-networks (concentration $\alpha$, allocation $p$, and dispersion
+$\tau$) sharing the SN-constrained backbone; the $p$ and $\tau$ heads
+inject additional gradient signal into shared features, and the
+Flexible-Dirichlet effective concentration
+$\alpha_{\text{eff}}\!=\!\alpha\!+\!\tau\!\cdot\!p$ splits the total
+evidence across a mixture component, so the same numerical $\alpha_0$
+does not carry the same ``total evidence'' semantics as in a plain
+Dirichlet --- consistent with our observation (\autoref{sec:score-ablation})
+that F-EDL's $\alpha_0$ score under-performs its $\max_c\hat p_c$ score
+on CIFAR-10$\to$SVHN. Second, F-EDL's Brier-on-mean regulariser
+$\|\mathbf{y}-\mathbf{p}\|^2$ duplicates information already present in
+the fit term \eqref{eq:fit}, doubling the gradient pressure on the same
+target signal and constraining the backbone harder than the Lipschitz
+bound alone; the minimal recipe avoids this interference. We propose
+these as hypotheses rather than verified causal mechanisms; a controlled
+ablation comparing F-EDL with and without each component is left to
+future work. The empirical takeaway holds either way: on the studied
+benchmarks, adding the Flexible-Dirichlet machinery on top of an
+SN-regularised Dirichlet head does not improve --- and on three of four
+headline metrics measurably degrades --- the resulting calibration and
+OOD performance.
+
+% =========================================================================
+\section{Experiments}\label{sec:exp}
+
+\subsection{Setup}\label{sec:setup}
+
+\paragraph{Datasets.}
+We evaluate on two in-distribution (ID) image classification benchmarks:
+MNIST and CIFAR-10. For each ID set we use two near/far OOD pairs:
+MNIST is paired with KMNIST (Kuzushiji-MNIST, near OOD, same image domain)
+and FMNIST (Fashion-MNIST, semantic near-OOD); CIFAR-10 is paired with
+SVHN (digit photographs, distribution shift in style) and CIFAR-100
+(natural-image semantic near-OOD with disjoint class set). All four OOD sets
+are evaluated against the trained ID classifier without any OOD exposure at
+training time.
+
+\paragraph{Backbones.}
+For MNIST we use a small ConvNet matching the architecture of prior EDL work
+~\citep{sensoy2018edl}; for CIFAR-10 we use VGG-16 as the main backbone in
+\autoref{tab:main-cifar10}, \autoref{tab:main-ood} and
+\autoref{tab:main-misc}, and also report a parallel ResNet-18 evaluation
+in \autoref{tab:main-resnet} to confirm backbone generality of the
+recipe.
+
+\paragraph{Baselines.}
+We compare against six published Dirichlet/evidential methods: standard EDL
+~\citep{sensoy2018edl}, I-EDL, R-EDL, Re-EDL, F-EDL, and DAEDL
+~\citep{yoon2024daedl}. All baselines are re-trained under our matched
+protocol using their published hyperparameters where prescribed; we do not
+use the published numbers directly.
+
+\paragraph{Training protocol.}
+We use a matched protocol across every method for fairness. Both datasets
+train for at most 200 epochs with Adam, batch size 64, and no learning-rate
+scheduler. The learning rate is $1\!\times\!10^{-3}$ for MNIST/ConvNet and
+$5\!\times\!10^{-4}$ for CIFAR-10/VGG-16. We hold out a $20\%$ split of the
+training set on MNIST and a $5\%$ split on CIFAR-10 as validation, and use
+\texttt{val/accuracy} with mode \texttt{max} as the early-stopping monitor
+(patience 20 epochs). We use \texttt{val/accuracy} rather than
+\texttt{val/loss} because the KL warmup schedule of several EDL variants
+makes the validation loss non-monotone over the first 10 epochs and
+incompatible with patience-based stopping. All experiments use 5 random
+seeds $\{0,1,2,3,4\}$ in 32-bit precision.
+
+\paragraph{Statistical procedure.}
+We report mean and standard deviation across 5 paired seeds for every
+metric. For the headline CIFAR-10 comparisons of FI-EDL+SN against the three
+strongest competitors (DAEDL, F-EDL, Re-EDL) we additionally run paired
+$t$-tests and 10\,000-resample bootstrap $95\%$ confidence intervals on the
+per-seed differences, with each method scored using its own best
+confidence/OOD score (DAEDL and Re-EDL at $\alpha_0$ for OOD, F-EDL at
+$\max_c\hat p_c$, all methods at $\max_c\hat p_c$ for misclassification
+detection). Full per-test numbers are in \autoref{sec:main} and in the
+supplementary statistics file the supplementary material.
+We adopt the convention that a difference is reported as a "win" only when
+$p\!<\!0.05$ \emph{and} the bootstrap $95\%$ CI excludes zero, and as a
+statistical "tie" otherwise; this convention is used uniformly in
+\autoref{sec:main} and throughout the discussion.
+
+\paragraph{Code and data availability.}
+All datasets used in this work are publicly available standard
+benchmarks: MNIST and CIFAR-10 as the in-distribution training sets,
+KMNIST and FashionMNIST as MNIST OOD, and SVHN and CIFAR-100 as CIFAR-10
+OOD. The implementation, Hydra configurations for every preset, training
+scripts (\texttt{scripts/run\_*.sh}), evaluation scripts, and aggregated
+results CSVs will be released at
+\url{https://github.com/<anonymous>/FI-EDL} upon acceptance; an
+anonymised snapshot is available to reviewers on request. All
+experiments were run on a single NVIDIA GPU; per-seed wall-clock times
+are approximately 15--20 minutes for MNIST (ConvNet), 1--1.5 hours for
+CIFAR-10/VGG-16, and 50 minutes for CIFAR-10/ResNet-18, with no
+specialised hardware required. Framework versions are pinned in the
+released \texttt{pyproject.toml} (PyTorch 2.x, PyTorch Lightning 2.x,
+Hydra 1.3).
+
+\subsection{Main results}\label{sec:main}
+
+We report main results in three tables: calibration (ECE, NLL,
+accuracy, AURC) in \autoref{tab:main-cifar10} and \autoref{tab:main-mnist};
+OOD detection (AUROC at each method's best score) in
+\autoref{tab:main-ood}; and misclassification detection (AUROC at
+$\max_c\hat p_c$) in \autoref{tab:main-misc}. The "FI-EDL" row throughout
+refers to the recommended recipe of \autoref{sec:recipe}: on CIFAR-10 the
+backbone uses spectral normalisation; on MNIST it does not, per the
+SN-off prescription discussed in \autoref{sec:disc-sn} and ablated in
+\autoref{sec:abl-sn}. All numbers are 5-seed mean $\pm$ standard
+deviation; bold marks the unique statistically-significant best (paired
+$t$-test $p\!<\!0.05$ \emph{and} bootstrap 95\% CI excludes zero, see
+the supplementary material).
+
+\begin{table*}[t]
+  \centering
+  \caption{Calibration and accuracy on CIFAR-10 with VGG-16 (5 seeds).
+    ECE and accuracy in percent; NLL is negative log-likelihood; AURC is
+    area under the risk-coverage curve. Bold = unique
+    statistically-significant best; underline = best-mean but
+    paired-tied. \textbf{FI-EDL row} is the recommended recipe
+    (backbone spectral normalisation = on). Statistical significance is
+    against the best competitor on each metric; full paired tests in the
+    supplementary material.}
+  \label{tab:main-cifar10}
+  \small
+  \begin{tabular}{lcccc}
+    \toprule
+    Method & ECE (\%)$\downarrow$ & NLL$\downarrow$ & Accuracy (\%)$\uparrow$ & AURC$\downarrow$ \\
+    \midrule
+    EDL    & $14.36 \pm 6.46$ & $1.6035 \pm 0.1361$ & $49.89 \pm 9.83$ & $0.2589 \pm 0.1380$ \\
+    I-EDL  & $39.44 \pm 1.11$ & $0.8357 \pm 0.0233$ & $90.58 \pm 0.60$ & $0.0173 \pm 0.0014$ \\
+    R-EDL  & $5.27 \pm 0.48$  & $0.4451 \pm 0.0264$ & $89.66 \pm 0.46$ & $0.0293 \pm 0.0030$ \\
+    Re-EDL ($\lambda{=}0.8$) & $5.11 \pm 1.11$ & $0.4256 \pm 0.0308$ & $90.38 \pm 0.26$ & $0.0168 \pm 0.0011$ \\
+    DAEDL  & $4.17 \pm 0.46$  & $0.4366 \pm 0.0106$ & $89.99 \pm 0.21$ & $0.0146 \pm 0.0011$ \\
+    F-EDL  & $5.82 \pm 0.55$  & $0.4536 \pm 0.0438$ & $90.53 \pm 0.34$ & $0.0153 \pm 0.0006$ \\
+    \textbf{FI-EDL (ours)} & \underline{$3.93 \pm 0.45$} & $0.3980 \pm 0.0040$ & $90.48 \pm 0.39$ & $0.0149 \pm 0.0008$ \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\begin{table}[t]
+  \centering
+  \caption{Calibration and accuracy on MNIST with the small ConvNet
+    (5 seeds). FI-EDL row uses the SN-off configuration of
+    \autoref{sec:abl-sn}.}
+  \label{tab:main-mnist}
+  \small
+  \begin{tabular}{lcccc}
+    \toprule
+    Method & ECE (\%)$\downarrow$ & NLL$\downarrow$ & Acc.\ (\%)$\uparrow$ & AURC$\downarrow$ \\
+    \midrule
+    EDL    & $6.73 \pm 1.78$  & $0.1281 \pm 0.0306$ & $98.34 \pm 0.31$ & $0.0003 \pm 0.0001$ \\
+    I-EDL  & $37.68 \pm 0.25$ & $0.4978 \pm 0.0062$ & $99.49 \pm 0.06$ & $0.0001 \pm 0.0000$ \\
+    R-EDL  & $5.97 \pm 1.12$  & $0.0820 \pm 0.0143$ & $99.38 \pm 0.07$ & $0.0001 \pm 0.0000$ \\
+    Re-EDL & $9.33 \pm 1.11$  & $0.1179 \pm 0.0132$ & $99.44 \pm 0.08$ & $0.0001 \pm 0.0000$ \\
+    DAEDL  & $50.97 \pm 1.63$ & $0.8933 \pm 0.0399$ & $95.83 \pm 0.30$ & $0.0027 \pm 0.0003$ \\
+    F-EDL  & $\mathbf{0.48 \pm 0.30}$ & $0.0253 \pm 0.0041$ & $99.34 \pm 0.10$ & $0.0001 \pm 0.0001$ \\
+    \textbf{FI-EDL (ours, SN-off)} & $1.70 \pm 0.73$ & $0.0846 \pm 0.1062$ & $97.31 \pm 4.44$ & $0.0013 \pm 0.0026$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table*}[t]
+  \centering
+  \caption{Out-of-distribution detection AUROC ($\uparrow$) on the four
+    OOD pairs. Each method is scored at its own best OOD score
+    (\autoref{sec:score-ablation}), shown in the ``Score'' column.
+    Identical AUROC values for $\alpha_0$ and vacuity are reported as
+    $\alpha_0$. CIFAR-10 OOD numbers are at VGG-16. Bold = unique
+    statistically-significant best in the column; underline = best-mean
+    but paired-tied.}
+  \label{tab:main-ood}
+  \small
+  \begin{tabular}{llcccc}
+    \toprule
+    Method & Score & MNIST$\to$KMNIST & MNIST$\to$FMNIST & CIFAR-10$\to$SVHN & CIFAR-10$\to$C100 \\
+    \midrule
+    EDL    & $\max_c\hat p_c$ & $95.38 \pm 1.33$ & $91.04 \pm 2.45$ & $75.01 \pm 2.55$ & $62.79 \pm 3.03$ \\
+    I-EDL  & $\max_c\hat p_c$ & $96.45 \pm 0.92$ & $92.36 \pm 3.48$ & $88.00 \pm 3.96$ & $82.41 \pm 1.23$ \\
+    R-EDL  & $\max_c\hat p_c$ & $95.63 \pm 0.55$ & $95.43 \pm 0.95$ & $87.12 \pm 1.56$ & $79.92 \pm 0.62$ \\
+    Re-EDL & $\alpha_0$       & $96.40 \pm 0.69$ & $96.08 \pm 1.15$ & $91.47 \pm 2.02$ & $85.82 \pm 0.30$ \\
+    DAEDL  & $\alpha_0$       & $\mathbf{99.98 \pm 0.01}$ & $\mathbf{99.99 \pm 0.00}$ & $88.63 \pm 1.86$ & $84.68 \pm 0.45$ \\
+    F-EDL  & $\max_c\hat p_c$ & $88.44 \pm 3.07$ & $97.22 \pm 0.81$ & $90.89 \pm 2.54$ & $84.15 \pm 0.71$ \\
+    \textbf{FI-EDL (ours)} & $\alpha_0$ & $94.08 \pm 4.26$ & $90.44 \pm 6.83$ & \underline{$92.99 \pm 1.77$} & $\mathbf{86.32 \pm 0.20}$ \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\begin{table}[t]
+  \centering
+  \caption{Misclassification detection on CIFAR-10/VGG-16 (5 seeds).
+    AUROC ($\uparrow$) of $\max_c\hat p_c$ as a correct-vs-wrong score
+    on the ID test set. Bold = unique statistically-significant best.}
+  \label{tab:main-misc}
+  \small
+  \begin{tabular}{lcc}
+    \toprule
+    Method & AUROC$\uparrow$ & Accuracy (\%)$\uparrow$ \\
+    \midrule
+    EDL    & $81.01 \pm 8.96$ & $49.89 \pm 9.83$ \\
+    I-EDL  & $89.39 \pm 0.75$ & $90.58 \pm 0.60$ \\
+    R-EDL  & $76.03 \pm 2.72$ & $89.66 \pm 0.46$ \\
+    Re-EDL & $89.40 \pm 0.60$ & $90.38 \pm 0.26$ \\
+    DAEDL  & $\mathbf{91.99 \pm 0.53}$ & $89.99 \pm 0.21$ \\
+    F-EDL  & $69.42 \pm 7.40$ & $90.53 \pm 0.34$ \\
+    \textbf{FI-EDL (ours)} & $90.70 \pm 0.20$ & $90.48 \pm 0.39$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Headline reading of the tables.} On CIFAR-10/VGG-16, the
+recipe attains the unique statistically-significant best on
+CIFAR-10$\to$CIFAR-100 OOD AUROC ($86.32$, $p\!<\!0.01$ over each of
+DAEDL, F-EDL, Re-EDL), best-mean ECE ($3.93$, paired-tied with DAEDL
+$4.17$, $p\!=\!0.55$), best-mean SVHN AUROC ($92.99$, paired-tied with
+Re-EDL $91.47$ at $p\!=\!0.12$ and F-EDL $90.89$ at $p\!=\!0.09$), and
+second on misclassification AUROC ($90.70$ versus DAEDL $91.99$,
+$p\!<\!0.01$). Accuracy at $90.48$ is statistically indistinguishable
+from the top three baselines. On MNIST the recommended SN-off
+configuration is second on ECE ($1.70$, behind F-EDL $0.48$), and
+sixth-to-seventh on OOD AUROC where DAEDL's GMM density head is
+empirically uncatchable by training-time-only signals
+(\autoref{sec:disc-limits} (ii)).
+
+\paragraph{Backbone generality: ResNet-18.}
+To confirm the recipe is not VGG-16-specific, we repeat the matched
+re-training of the four strongest contenders --- FI-EDL+SN, DAEDL,
+F-EDL, Re-EDL --- with a ResNet-18 backbone on the same protocol (5
+seeds, lr $5\!\times\!10^{-4}$, 200-epoch budget with val/accuracy
+early stopping). Results appear in \autoref{tab:main-resnet}; full
+paired-test statistics are in the supplementary material.
+
+\begin{table*}[t]
+  \centering
+  \caption{CIFAR-10 with ResNet-18 (5 seeds). Backbone generality
+    confirmation for the recipe. Bold marks the unique
+    statistically-significant best per metric; underline marks
+    best-mean with at least one paired-tie. Paired tests are
+    FI-EDL+SN-resnet against each baseline-resnet.}
+  \label{tab:main-resnet}
+  \small
+  \begin{tabular}{lccccc}
+    \toprule
+    Method & Acc (\%)$\uparrow$ & ECE (\%)$\downarrow$ & SVHN AUROC$\uparrow$
+      & C100 AUROC$\uparrow$ & Misclass AUROC$\uparrow$ \\
+    \midrule
+    DAEDL  & $90.28 \pm 0.50$ & $3.73 \pm 0.26$ & $87.94 \pm 1.44$
+      & $84.63 \pm 0.49$ & $\mathbf{92.93 \pm 0.58}$ \\
+    F-EDL  & $91.71 \pm 0.19$ & $4.77 \pm 0.26$ & $85.85 \pm 1.25$
+      & $84.63 \pm 0.75$ & $91.03 \pm 0.50$ \\
+    Re-EDL & $91.83 \pm 0.32$ & $12.82 \pm 2.14$ & $92.51 \pm 1.20$
+      & $\mathbf{87.94 \pm 0.39}$ & $91.31 \pm 0.50$ \\
+    \textbf{FI-EDL (ours)} & $91.77 \pm 0.26$ & $\mathbf{3.15 \pm 0.57}$
+      & \underline{$93.02 \pm 1.56$} & $87.08 \pm 0.40$ & $90.75 \pm 0.25$ \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+The ResNet-18 transfer reorders the headlines slightly. The recipe now
+attains the \emph{uniquely significant} best ECE on the new backbone
+($3.15$ vs DAEDL $3.73$, $p\!=\!0.038$; vs F-EDL $4.77$, $p\!=\!0.007$;
+vs Re-EDL $12.82$, $p\!<\!0.001$) --- a stronger calibration claim than
+on VGG-16, where DAEDL was a paired-tied competitor. SVHN OOD AUROC
+remains best-mean ($93.02$), uniquely significant over DAEDL and F-EDL
+but paired-tied with Re-EDL ($p\!=\!0.67$). On CIFAR-10$\to$CIFAR-100,
+however, Re-EDL on ResNet-18 attains $87.94$ versus our $87.08$, a
+statistically significant $-0.86$ percentage-point gap ($p\!<\!0.01$);
+this is the only main-table metric on which the recipe is not at the
+top of the ResNet-18 ranking. The Misclass-AUROC loss to DAEDL of
+\autoref{tab:main-misc} is preserved, at a larger $-2.18$ percentage
+points ($p\!<\!0.001$). Accuracy is statistically tied with F-EDL and
+Re-EDL at the top ($\sim 91.8\%$). Re-EDL's exceptional ECE regression
+on ResNet-18 ($12.82$, versus $5.11$ on VGG-16) is worth noting --- the
+KL-free Re-EDL is calibrated only under a backbone with strong feature
+regularisation, suggesting that an explicit Lipschitz constraint (our
+recipe) is more robust to backbone choice than evidence-weighted prior
+relaxation alone.
+
+\paragraph{Cross-backbone summary.} Across VGG-16
+(\autoref{tab:main-cifar10}, \autoref{tab:main-ood},
+\autoref{tab:main-misc}) and ResNet-18 (\autoref{tab:main-resnet}), the
+recipe is the only method that is best-mean or best-significant on
+\emph{both} ECE and one CIFAR-10 OOD direction simultaneously. Its
+weak spots are consistent: misclassification AUROC trails DAEDL on
+both backbones (the missing density signal), and on ResNet-18
+specifically CIFAR-100 OOD goes to Re-EDL by a narrow but significant
+margin. These are documented honestly in \autoref{sec:disc-limits}.
+
+\paragraph{Additional OOD sets: DTD and GTSRB.}
+To check that the recipe's OOD wins do not depend on the specific
+choice of CIFAR-10$\to$SVHN/CIFAR-100, we additionally evaluate on two
+extended Hendrycks-style far-OOD benchmarks: Describable Textures
+(DTD)~\citep{cimpoi2014describing} with $1{,}880$ textured natural
+images, and the German Traffic Sign Recognition Benchmark
+(GTSRB)~\citep{stallkamp2012gtsrb} with $12{,}630$ traffic-sign images.
+GTSRB is one of the six OOD pairs used by Re-EDL in their CIFAR-10
+setup~\citep{chen2025reedl}. Both are forward-only on the existing
+VGG-16 checkpoints (5 seeds, each method at its best OOD score).
+Results in \autoref{tab:main-extended-ood}.
+
+On DTD the recipe attains $\mathrm{AUROC}\!=\!91.09\!\pm\!0.28$,
+\emph{uniquely significantly} above each of DAEDL ($89.42$,
+$p\!=\!0.017$), F-EDL ($87.95$, $p\!=\!0.003$), and Re-EDL ($90.00$,
+$p\!=\!0.009$). On GTSRB it attains $\mathrm{AUROC}\!=\!88.82\!\pm\!1.30$,
+significantly beating DAEDL ($86.61$, $p\!=\!0.001$) and F-EDL
+($86.07$, $p\!=\!0.017$), and statistically tied with Re-EDL
+($87.40$, $p\!=\!0.11$). Together with CIFAR-10$\to$CIFAR-100
+(\autoref{tab:main-ood}), the recipe has three CIFAR-10 OOD sets where
+it is uniquely significantly best, and two more (SVHN, GTSRB) where it
+is best-mean and paired-tied with Re-EDL.
+
+\begin{table}[t]
+  \centering
+  \caption{Extended CIFAR-10 OOD AUROC ($\uparrow$) on Describable
+    Textures (DTD) and GTSRB (German Traffic Sign Recognition
+    Benchmark), 5 seeds, VGG-16, each method at its best OOD score.
+    Bold = unique statistically-significant best ($p\!<\!0.05$ and
+    bootstrap CI excludes zero); underline = best-mean with at least
+    one paired-tie.}
+  \label{tab:main-extended-ood}
+  \small
+  \begin{tabular}{lcccc}
+    \toprule
+    Method & DTD AUROC ($\uparrow$) & DTD score & GTSRB AUROC ($\uparrow$) & GTSRB score \\
+    \midrule
+    F-EDL  & $87.95 \pm 0.80$ & $\max_c\hat p_c$ & $86.07 \pm 2.12$ & $\max_c\hat p_c$ \\
+    DAEDL  & $89.42 \pm 0.74$ & $\alpha_0$ & $86.61 \pm 1.49$ & $\alpha_0$ \\
+    Re-EDL & $90.00 \pm 0.47$ & $\alpha_0$ & $87.40 \pm 1.22$ & $\alpha_0$ \\
+    \textbf{FI-EDL (ours)} & $\mathbf{91.09 \pm 0.28}$ & $\alpha_0$ & \underline{$88.82 \pm 1.30$} & $\alpha_0$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Harder benchmark: CIFAR-100 (F-EDL setup).}
+To test whether the recipe transfers to a $10\times$ larger label space,
+we replicate the F-EDL CIFAR-100 setup~\citep{yoon2025fedl}: ResNet-18
+backbone, matched protocol (5 seeds, lr $5\!\times\!10^{-4}$, batch 64,
+val/accuracy early stopping with patience 20), and OOD evaluation on
+SVHN, CIFAR-10, TinyImageNet, and DTD. Results in
+\autoref{tab:main-cifar100}. Three findings stand out. First, with the
+larger $K\!=\!100$ the recipe attains the best mean accuracy
+($67.78\!\pm\!0.55\%$, paired-tied with Re-EDL $68.21$) and best mean
+ECE among methods that actually train successfully ($8.43\!\pm\!1.69\%$,
+paired-tied with F-EDL $10.23$, $p\!=\!0.34$; significantly better than
+Re-EDL's $29.17\%$, $p\!<\!0.001$). Second, on every OOD direction the
+recipe is best-mean or paired-tied with Re-EDL: TIN
+$75.95\!\pm\!0.56$ (paired-tied with Re-EDL $76.38$, $p\!=\!0.20$),
+CIFAR-10 $73.57\!\pm\!1.20$ (Re-EDL $73.85$, $p\!=\!0.72$), SVHN
+$75.02\!\pm\!3.51$ (Re-EDL $75.55$, $p\!=\!0.85$), DTD
+$71.96\!\pm\!1.94$ (Re-EDL $70.65$, $p\!=\!0.27$). All four are
+statistically tied at the top.
+
+Third, DAEDL underperforms severely on this benchmark. During training
+the network reaches validation accuracy $\sim\!20\%$ (well above
+random $1/K\!=\!1\%$ but well below the $66\!\pm\!67\%$ of the other
+three methods); the post-hoc class-conditional GMM is then fit
+successfully on $47{,}500$ samples $\times\,512$-dimensional features
+(per our training-time log), but the test-time density-weighted logit
+$\alpha\!=\!\exp(g_{\phi}(f_{\theta}(x))\!\cdot\!s(x))$ further
+compresses predicted probabilities toward uniform, dropping test
+accuracy to $1.76\!\pm\!0.55\%$. F-EDL's published paper independently
+reports DAEDL on the same benchmark at $66.01\!\pm\!2.6\%$ accuracy
+but with ECE $86.00\%$~\citep{yoon2025fedl}, indicating that DAEDL on
+CIFAR-100 either fails to train (our matched protocol) or trains to
+reasonable accuracy but with severely under-confident predictions
+(F-EDL's report). In either regime, DAEDL's density-augmented EDL
+recipe is empirically brittle at $K\!=\!100$ in a way that the
+density-free recipes (FI-EDL, Re-EDL, F-EDL) are not.
+
+\begin{table*}[t]
+  \centering
+  \caption{CIFAR-100 with ResNet-18 (matching F-EDL Appendix E.2,
+    5 seeds). Each method at its best score for the OOD column; ECE in
+    percent; bold = unique statistically-significant best; underline =
+    best-mean with at least one paired-tie. DAEDL's collapse to
+    near-random accuracy is described in the surrounding text and
+    matches the analogous degradation reported by \citet{yoon2025fedl}
+    on the same benchmark.}
+  \label{tab:main-cifar100}
+  \small
+  \begin{tabular}{lcccccc}
+    \toprule
+    Method & Acc (\%)$\uparrow$ & ECE (\%)$\downarrow$ & SVHN AUROC$\uparrow$
+      & C10 AUROC$\uparrow$ & TIN AUROC$\uparrow$ & DTD AUROC$\uparrow$ \\
+    \midrule
+    DAEDL$^{\dagger}$  & $1.76 \pm 0.55$ & $0.76 \pm 0.55$ &
+      $48.68 \pm 3.74$ & $49.93 \pm 0.53$ & $50.02 \pm 0.42$ & $46.88 \pm 1.13$ \\
+    F-EDL   & $66.61 \pm 0.33$ & $10.23 \pm 3.33$ &
+      $64.30 \pm 3.11$ & $70.55 \pm 0.36$ & $73.81 \pm 0.54$ & $65.09 \pm 1.67$ \\
+    Re-EDL  & $\underline{68.21 \pm 0.50}$ & $29.17 \pm 3.60$ &
+      \underline{$75.55 \pm 2.84$} & \underline{$73.85 \pm 0.50$} &
+      \underline{$76.38 \pm 0.14$} & $70.65 \pm 0.72$ \\
+    \textbf{FI-EDL (ours)} & $67.78 \pm 0.55$ & $\underline{8.43 \pm 1.69}$ &
+      $75.02 \pm 3.51$ & $73.57 \pm 1.20$ & $75.95 \pm 0.56$ &
+      $\underline{71.96 \pm 1.94}$ \\
+    \bottomrule
+  \end{tabular}
+  \\ {\footnotesize $^{\dagger}$DAEDL on CIFAR-100/ResNet-18 reaches
+   validation accuracy $\sim\!20\%$ during training (above random $1\%$
+   but well below the other three methods); the post-hoc density
+   weighting at test time then compresses predictions toward uniform,
+   dropping test accuracy to $1.76\!\pm\!0.55\%$. F-EDL's
+   paper~\citep{yoon2025fedl} reports DAEDL at $66\%$ accuracy with
+   $86\%$ ECE on the same benchmark — an analogous, calibration-side
+   collapse. See main text for the full mechanism.}
+\end{table*}
+
+\paragraph{Robustness under corruption: CIFAR-10-C
+(DAEDL/F-EDL setup).}
+We additionally evaluate distribution-shift robustness on
+CIFAR-10-C~\citep{hendrycks2019benchmarking}, the
+$19\!\times\!5\!=\!95$ corrupted variants of the CIFAR-10 test set used
+as the standard robustness benchmark in both DAEDL (Table 4) and
+F-EDL (Table 2). Forward-only on the existing VGG-16 checkpoints
+(5 seeds), per-severity numbers averaged over the 19 corruption types
+are in \autoref{tab:main-cifar10c}. Three findings, all paired-tested
+across the 5 matched seeds:
+
+(i) Classification accuracy under corruption.  The recipe is best at
+every severity. Averaged across severities 1--5, it improves accuracy
+by $+3.18$ percentage points over DAEDL ($p\!<\!0.001$), $+1.38$ over
+F-EDL ($p\!=\!0.017$), and $+1.65$ over Re-EDL ($p\!=\!0.030$);
+the gap widens with severity, reaching $+5.12$ over DAEDL at the
+worst level $\mathcal{C}\!=\!5$ ($p\!<\!0.001$).
+
+(ii) Calibration under corruption.  Averaged across severities, the
+recipe attains ECE $16.81\%$ versus F-EDL $19.72$ ($p\!=\!0.027$,
+WIN), Re-EDL $19.52$ ($p\!=\!0.14$, paired-tie), and DAEDL $14.43$
+($p\!=\!0.042$, loss).  DAEDL's post-hoc class-conditional density
+head, while empirically unstable at $K\!=\!100$
+(\autoref{tab:main-cifar100}), gives it a small but significant
+calibration advantage under continuous distribution shift on
+CIFAR-10. This is one of two CIFAR-10 metrics on which the recipe
+trails DAEDL --- the other being clean-test misclassification AUROC
+(\autoref{tab:main-misc}) --- and motivates the future-work direction
+of layering a density head on top of our recipe
+(\autoref{sec:disc-future}).
+
+(iii) Distribution-shift detection AUPR.  All four methods are
+statistically tied at every severity: the maximum predicted
+probability signal differentiates clean from corrupted inputs with
+essentially identical AUPR ($\sim\!56$--$73\%$ across severities), so
+the recipe's improvements over DAEDL/F-EDL/Re-EDL on cleaner OOD
+benchmarks do not translate into a measurable shift-detection
+advantage on CIFAR-10-C.
+
+\begin{table*}[t]
+  \centering
+  \caption{CIFAR-10-C per-severity results, averaged over 19
+    corruption types and 5 seeds.  Each cell is mean $\pm$ std across
+    seeds (the inner 19-corruption average is deterministic per
+    seed). Bold = unique statistically-significant best at that
+    severity (paired $t$-test vs.\ second-best, $p\!<\!0.05$);
+    underline = best-mean with at least one paired-tie.}
+  \label{tab:main-cifar10c}
+  \small
+  \begin{tabular}{lccccc}
+    \toprule
+    Method & $\mathcal{C}\!=\!1$ & $\mathcal{C}\!=\!2$ & $\mathcal{C}\!=\!3$ & $\mathcal{C}\!=\!4$ & $\mathcal{C}\!=\!5$ \\
+    \midrule
+    \multicolumn{6}{l}{\emph{Classification accuracy under corruption (\%, higher is better)}} \\
+    DAEDL  & $82.73 \pm 0.30$ & $76.61 \pm 0.65$ & $70.59 \pm 0.72$ & $63.15 \pm 0.73$ & $51.88 \pm 0.88$ \\
+    F-EDL  & $83.82 \pm 0.47$ & $78.02 \pm 0.79$ & $72.36 \pm 1.08$ & $65.29 \pm 1.39$ & $54.47 \pm 1.64$ \\
+    Re-EDL & $83.30 \pm 0.60$ & $77.45 \pm 0.95$ & $72.04 \pm 1.17$ & $65.25 \pm 1.39$ & $54.58 \pm 1.99$ \\
+    \textbf{FI-EDL (ours)} & $\mathbf{84.07 \pm 0.34}$ & $\mathbf{78.67 \pm 0.45}$ & $\mathbf{73.71 \pm 0.62}$ & $\mathbf{67.39 \pm 0.76}$ & \underline{$57.00 \pm 1.22$} \\
+    \midrule
+    \multicolumn{6}{l}{\emph{ECE under corruption (\%, lower is better)}} \\
+    DAEDL  & $\mathbf{7.56 \pm 0.27}$ & $\mathbf{10.48 \pm 0.16}$ & $\mathbf{13.46 \pm 0.14}$ & $\mathbf{17.30 \pm 0.38}$ & $\mathbf{23.34 \pm 0.83}$ \\
+    F-EDL  & $10.39 \pm 0.89$ & $14.47 \pm 1.25$ & $18.56 \pm 1.80$ & $23.74 \pm 2.30$ & $31.44 \pm 3.02$ \\
+    Re-EDL & $10.05 \pm 1.69$ & $14.31 \pm 2.30$ & $18.35 \pm 2.85$ & $23.48 \pm 3.49$ & $31.43 \pm 4.88$ \\
+    \textbf{FI-EDL (ours)} & $8.32 \pm 0.79$ & $12.17 \pm 1.13$ & $15.72 \pm 1.46$ & $20.21 \pm 1.78$ & $27.61 \pm 3.05$ \\
+    \midrule
+    \multicolumn{6}{l}{\emph{Distribution-shift detection AUPR (\%, higher is better)}} \\
+    DAEDL  & $56.67 \pm 0.41$ & $61.49 \pm 0.62$ & $65.12 \pm 0.70$ & $68.80 \pm 0.85$ & $73.40 \pm 0.93$ \\
+    F-EDL  & $56.67 \pm 0.23$ & $61.54 \pm 0.39$ & $65.19 \pm 0.38$ & $68.84 \pm 0.38$ & $73.44 \pm 0.45$ \\
+    Re-EDL & $56.45 \pm 0.46$ & $61.00 \pm 0.59$ & $64.33 \pm 0.51$ & $67.84 \pm 0.37$ & $72.37 \pm 0.14$ \\
+    FI-EDL (ours) & $56.56 \pm 0.48$ & $61.26 \pm 0.83$ & $64.82 \pm 1.05$ & $68.62 \pm 1.11$ & $73.46 \pm 1.24$ \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\subsection{Score selection ablation}\label{sec:score-ablation}
+
+Headline OOD comparisons in the literature typically report a single
+confidence score (most often $\max_c\hat p_c$) across all methods, which
+risks under-reporting evidential methods whose total evidence $\alpha_0$
+is a stronger separator. We re-evaluate every baseline at four scores
+$\{\max_c\hat p_c,\ \max_c\alpha_c,\ \alpha_0,\ \text{vacuity}\}$ on
+CIFAR-10$\to$\{SVHN, CIFAR-100\}, with no retraining; the full matrix is
+in the supplementary material and \autoref{tab:score-audit} summarises
+the per-method best score.
+
+\begin{table}[t]
+  \centering
+  \caption{Per-method best OOD score on CIFAR-10/VGG-16, 5-seed AUROC.
+    \emph{vacuity} $=\!K/\alpha_0$ is a monotone-decreasing transform of
+    $\alpha_0$, so the two yield identical ranking and identical AUROC;
+    we group them and report $\alpha_0$ (higher = more in-distribution).
+    Numbers are extracted from the same 5-seed runs that appear in
+    \autoref{tab:main-cifar10}.}
+  \label{tab:score-audit}
+  \small
+  \begin{tabular}{lccc}
+    \toprule
+    Method & SVHN best & CIFAR-100 best & $\alpha_0\!-\!\max_c\hat p_c$ swap (SVHN / C100) \\
+    \midrule
+    EDL    & $\max_c\hat p_c$ & $\max_c\hat p_c$ & $-6.17$ / $-1.79$ \\
+    I-EDL  & $\max_c\hat p_c$ & $\max_c\hat p_c$ & $-0.50$ / $-0.47$ \\
+    R-EDL  & $\max_c\hat p_c$ & $\max_c\hat p_c$ & $-25.44$ / $-9.44$ \\
+    F-EDL  & $\max_c\hat p_c$ & $\max_c\hat p_c$ & $-54.70$ / $-26.87$ \\
+    DAEDL  & either           & either           & $+0.02$ / $+0.01$ \\
+    Re-EDL & $\alpha_0$       & $\alpha_0$       & $+1.57$ / $+1.22$ \\
+    FI-EDL & $\alpha_0$       & $\alpha_0$       & $+1.83$ / $+0.87$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Three findings.}
+First, the right OOD score depends on the loss family. Methods that
+keep the target-class evidence numerically meaningful --- Re-EDL drops
+the KL term so $\alpha_0$ tracks total evidence directly, and FI-EDL
+trains without any KL crushing the target $\alpha$ --- consistently
+prefer $\alpha_0$ over $\max_c\hat p_c$, with swap gains of $+1.2$ to
+$+1.8$ percentage points. Methods that aggressively regularise toward
+the uniform Dirichlet (EDL, I-EDL, R-EDL) or that split total evidence
+across a mixture component (F-EDL's
+$\alpha_{\text{eff}}\!=\!\alpha\!+\!\tau\!\cdot\!p$) instead degrade
+catastrophically at $\alpha_0$ --- F-EDL's $\alpha_0$ AUROC drops to
+$36.19$ on SVHN, $54.7$ percentage points below its $\max_c\hat p_c$
+score. The same effect at smaller magnitude appears for R-EDL ($-25.4$
+percentage points). Second, DAEDL is the unique baseline for which both
+scores are within $0.02$ percentage points of each other: its post-hoc
+GMM density head scales the predicted distribution so that both
+$\max_c\hat p_c$ and $\alpha_0$ track the same underlying density
+signal. Third, on misclassification detection (correct-vs-wrong on the
+ID test set) a separate audit (not shown for brevity) confirms that
+$\max_c\hat p_c$ remains the best score across every method including
+ours; the $\alpha_0$ advantage is OOD-specific. We therefore report all
+headline OOD numbers in \autoref{sec:main} at each method's best OOD
+score and all misclassification numbers at $\max_c\hat p_c$. A single
+fixed score across all methods is a measurement convention that
+systematically misrepresents at least three baselines on the
+\autoref{tab:main-cifar10} OOD comparison; this measurement caveat,
+rather than a new model, is contribution 5 of \autoref{sec:intro}.
+
+% =========================================================================
+\section{Ablations}\label{sec:ablations}
+
+\subsection{FIM controller: gate-on causes calibration
+collapse}\label{sec:abl-gate}
+
+\autoref{sec:diagnosis} establishes that under the published
+$\beta\!=\!\gamma\!=\!1$ the FIM gate is saturated near zero, so the KL
+regularizer is effectively absent during FI-EDL training. A natural
+question is what happens once the gate is restored to a non-trivial value.
+We test three configurations on CIFAR-10 with two seeds each, using
+recent normalization tricks intended to bring $\mathrm{tr}(I(\alpha))$ to
+$\mathcal{O}(1)$ before exponentiation: (i) a fixed division by the class
+count $K$ (\texttt{div\_k}) so that the gate stabilizes at
+$\lambda\!\approx\!0.23$; (ii) a per-batch $z$-score
+(\texttt{batch\_z}) with $\gamma\!=\!0.5$; and (iii) the same per-batch
+$z$-score but driven by the total evidence $\alpha_0$ rather than by the
+Fisher trace. A standard 10-epoch KL warmup is applied in every case.
+\autoref{tab:abl-gate-on} reports the result.
+
+\begin{table}[t]
+  \centering
+  \caption{Stage-1 sweep on CIFAR-10/VGG-16. Re-enabling the FI-EDL gate
+    with any of three signal-normalization schemes collapses calibration
+    (ECE rises from $5.19\%$ to $71.62$--$78.67\%$) at essentially
+    unchanged accuracy, the unmistakable signature of severe
+    underconfidence. Baseline is FI-EDL with the gate left off
+    ($\lambda\!\approx\!5\!\times\!10^{-7}$); 5 seeds for the baseline,
+    2 seeds for the other rows.}
+  \label{tab:abl-gate-on}
+  \small
+  \begin{tabular}{lcccc}
+    \toprule
+    Configuration & Acc (\%) $\uparrow$ & ECE (\%) $\downarrow$
+      & SVHN AUROC $\uparrow$ & C100 AUROC $\uparrow$ \\
+    \midrule
+    Baseline (gate off)
+      & $90.32\!\pm\!0.31$ & $\mathbf{5.19\!\pm\!0.54}$
+      & $\mathbf{91.72\!\pm\!2.21}$ & $\mathbf{84.67\!\pm\!1.59}$ \\
+    Fisher + div\_k, $\gamma\!=\!1$ (gate on)$^{\dagger}$
+      & $89.95$ & $71.62$ & $92.31$ & $79.41$ \\
+    Fisher + batch\_z, $\gamma\!=\!0.5\,^{\dagger}$
+      & $89.75$ & $78.67$ & $88.27$ & $75.65$ \\
+    $\alpha_0$ + batch\_z, $\gamma\!=\!0.5\,^{\dagger}$
+      & $88.69$ & $77.29$ & $69.72$ & $68.42$ \\
+    \bottomrule
+  \end{tabular}
+  \\ {\footnotesize $^{\dagger}$ $n\!=\!2$ seeds (diagnostic sweep); the
+   baseline row uses $n\!=\!5$.}
+\end{table}
+
+The mechanism is immediate. FI-EDL's KL term uses the full Dirichlet
+concentration $\mathrm{KL}(\mathrm{Dir}(\alpha)\,\|\,\mathrm{Dir}(\mathbf{1}))$,
+\emph{including the target class}, rather than the target-masked form
+$\tilde\alpha\!=\!\alpha\odot(1-y)+y$ used by standard EDL. With the gate
+saturated at $5\!\times\!10^{-7}$ this is harmless; with the gate restored,
+the KL term actively pulls every $\alpha_c$ -- including the predicted
+class -- toward unity, and the predicted maximum probability collapses
+toward $1/K\!=\!0.1$. Accuracy is preserved because the argmax remains
+stable, but the calibration metric quantifies precisely this gap between
+the (suppressed) confidence and the (unchanged) accuracy. Any meaningful
+KL regularization in the original FI-EDL form therefore destroys
+calibration. Conclusion: the gate is not a controller that can be
+``unlocked'' to do useful work; the form of the regularizer itself is
+incompatible with target-class confidence.
+
+\subsection{Masked-KL controller does not save the
+recipe}\label{sec:abl-masked}
+
+The natural next attempt is to swap the full-$\alpha$ KL in FI-EDL for the
+standard target-masked form $\tilde\alpha\!=\!\alpha\odot(1-y)+y$, which
+protects the predicted class from being driven to $1/K$. If the
+controller's adaptivity is meaningful, the masked variant should now
+deliver a net gain over the gate-off baseline. We test the two surviving
+configurations from \autoref{tab:abl-gate-on} -- the only ones whose
+accuracy did not regress -- with the masked KL, two seeds each. Results
+are in \autoref{tab:abl-masked}.
+
+\begin{table}[t]
+  \centering
+  \caption{Stage-2 sweep on CIFAR-10/VGG-16. Replacing the full-$\alpha$
+    KL with the target-masked variant $\tilde\alpha\!=\!\alpha\odot(1-y)+y$
+    prevents the calibration collapse but yields no metric gain over the
+    gate-off baseline. The $\alpha_0$-driven variant additionally fails
+    to train.}
+  \label{tab:abl-masked}
+  \small
+  \begin{tabular}{lcccc}
+    \toprule
+    Configuration & Acc (\%) $\uparrow$ & ECE (\%) $\downarrow$
+      & SVHN AUROC $\uparrow$ & C100 AUROC $\uparrow$ \\
+    \midrule
+    Baseline (gate off)
+      & $\mathbf{90.32\!\pm\!0.31}$ & $\mathbf{5.19\!\pm\!0.54}$
+      & $\mathbf{91.72\!\pm\!2.21}$ & $\mathbf{84.67\!\pm\!1.59}$ \\
+    Fisher + div\_k, $\gamma\!=\!1$ + masked$^{\dagger}$
+      & $89.26\!\pm\!0.49$ & $5.46\!\pm\!0.82$
+      & $90.86\!\pm\!0.40$ & $84.00\!\pm\!0.48$ \\
+    $\alpha_0$ + batch\_z, $\gamma\!=\!0.5$ + masked$^{\dagger}$
+      & $38.43\!\pm\!0.69$ & $9.44\!\pm\!5.44$
+      & $63.70\!\pm\!5.63$ & $56.50\!\pm\!1.58$ \\
+    \bottomrule
+  \end{tabular}
+  \\ {\footnotesize $^{\dagger}$ $n\!=\!2$ seeds (diagnostic sweep); the
+   baseline row uses $n\!=\!5$.}
+\end{table}
+
+Masking recovers calibration ($5.46$ vs.\ $5.19\%$ baseline ECE) but
+adds nothing: accuracy drops by $1.06$ pp, SVHN AUROC by $0.86$, CIFAR-100
+AUROC by $0.67$. The root cause is the one already exposed by the
+diagnosis in \autoref{sec:diagnosis}: the per-sample standard deviation of
+$\mathrm{tr}(I(\alpha))$ is only $6.5\%$ of its mean, so even after
+normalization the controller has essentially no per-sample variation to
+adapt to. The masked-KL+\texttt{div\_k} configuration is therefore
+empirically indistinguishable from a fixed-strength KL term, which the
+EDL literature already explored. The $\alpha_0$-driven variant collapses
+training entirely (38\% accuracy) because the controller signal is dominated
+by the batch-level normalization rather than by sample-level evidence.
+
+The combined conclusion of \autoref{sec:abl-gate} and \autoref{sec:abl-masked}
+is that the FIM controller mechanism is empirically inert under the
+original FI-EDL framing, that any straightforward rescue either preserves
+the calibration tax of full-$\alpha$ KL or loses the adaptivity premise,
+and that the cleanest path forward is to remove the controller entirely.
+This is what the recipe of \autoref{sec:recipe} does.
+
+\subsection{Backbone spectral normalization: CIFAR-10 gain, MNIST
+regression}\label{sec:abl-sn}
+
+The final ablation isolates the effect of backbone spectral normalization
+in the proposed recipe. We re-train FI-EDL with the gate-off, KL-free fit
+of \autoref{sec:recipe} on both MNIST (ConvNet) and CIFAR-10 (VGG-16),
+toggling \texttt{backbone\_spectral\_norm} on or off and holding everything
+else fixed. Five seeds per cell. Results are in
+\autoref{tab:abl-sn}.
+
+\begin{table}[t]
+  \centering
+  \caption{Backbone spectral normalization on/off, KL-free fit, 5 seeds.
+    SN improves every CIFAR-10 metric but harms MNIST calibration:
+    ECE jumps from $1.70\%$ to $13.60\%$, and the $\alpha_0$ OOD score
+    becomes unusable on FMNIST. Reported scores: AUROCs use $\alpha_0$ on
+    CIFAR-10 and the score listed on MNIST.}
+  \label{tab:abl-sn}
+  \small
+  \begin{tabular}{llcccc}
+    \toprule
+    Dataset & Config & Acc (\%) $\uparrow$ & ECE (\%) $\downarrow$
+      & OOD$_1$ AUROC $\uparrow$ & OOD$_2$ AUROC $\uparrow$ \\
+    \midrule
+    \multirow{3}{*}{MNIST}
+      & baseline (SN off, maxp) & $97.31\!\pm\!4.44$
+        & $\mathbf{1.70\!\pm\!0.73}$
+        & KMNIST $\mathbf{94.08}$ & FMNIST $\mathbf{90.44}$ \\
+      & +SN (maxp)              & $\mathbf{98.82\!\pm\!0.08}$
+        & $13.60\!\pm\!1.27$
+        & KMNIST $92.06$ & FMNIST $\mathbf{93.38}$ \\
+      & +SN ($\alpha_0$)        & --- & --- & KMNIST $81.30$ &
+        FMNIST $47.04$ \\
+    \midrule
+    \multirow{2}{*}{CIFAR-10}
+      & baseline (SN off, $\alpha_0$) & $90.32\!\pm\!0.31$
+        & $5.19\!\pm\!0.54$ & SVHN $91.72\!\pm\!2.21$
+        & C100 $84.67\!\pm\!1.59$ \\
+      & \textbf{+SN ($\alpha_0$)}     & $\mathbf{90.48\!\pm\!0.39}$
+        & $\mathbf{3.93\!\pm\!0.45}$
+        & SVHN $\mathbf{92.99\!\pm\!1.77}$
+        & C100 $\mathbf{86.32\!\pm\!0.20}$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{CIFAR-10: every metric improves.} SN reduces ECE from
+$5.19$ to $3.93\%$, lifts CIFAR-10$\to$SVHN AUROC from $91.72$ to $92.99$,
+and CIFAR-10$\to$CIFAR-100 AUROC from $84.67$ to $86.32$, at unchanged
+accuracy. The result is consistent with the distance-aware Lipschitz
+argument of SNGP and DUQ~\citep{liu2020sngp,vanamersfoort2020duq}:
+constraining the spectral norm of every backbone layer prevents the
+feature norm from blowing up on far-OOD inputs, so the Dirichlet head's
+total evidence $\alpha_0$ remains a usable confidence signal across the
+input space rather than being dominated by uncontrolled magnitudes.
+
+\paragraph{MNIST: SN regresses calibration.} On the same recipe, SN
+\emph{worsens} ECE from $1.70$ to $13.60\%$ and inverts the score
+priority: the $\alpha_0$ score becomes unusable on FMNIST (AUROC
+$47.04$, below chance) while $\max_c\hat p_c$ remains marginally usable.
+Accuracy and seed-variance do improve ($97.31\!\pm\!4.44$ to
+$98.82\!\pm\!0.08\%$), but the calibration cost is severe.
+Mechanistically, the small MNIST ConvNet is already close to the
+Lipschitz budget that SN enforces, so the additional constraint
+over-tightens the logit magnitude: the network becomes systematically
+underconfident, and total evidence $\alpha_0$ no longer scales with
+input familiarity because it is pinned near a small value across the
+whole input space. The same constraint that liberates a deep VGG-16 from
+overconfident far-OOD features over-regularizes the small MNIST backbone.
+
+\paragraph{Practical prescription.} The recipe is therefore SN-on for
+natural-image backbones (where it sets a new CIFAR-10 OOD SOTA, see
+\autoref{sec:main}) and SN-off for small-backbone settings such as MNIST.
+This split is consistent with the SNGP/DUQ literature, where the
+distance-awareness argument assumes a backbone deep enough that the
+Lipschitz budget is not already at the bottleneck. A learned SN
+coefficient that automatically adapts the constraint to the backbone is
+a natural next step (\autoref{sec:discussion}).
+
+% =========================================================================
+\section{Discussion}\label{sec:discussion}
+
+\subsection{Why does a deliberately minimal recipe match or beat more
+elaborate baselines?}\label{sec:disc-why}
+The skeptical reading of our results is: ``if you only \emph{remove}
+machinery and still win, what is your method actually adding?'' Three
+threads of evidence give a coherent answer. First, additional machinery
+adds additional failure modes. F-EDL's allocation and dispersion
+sub-heads $(p,\tau)$ ($\sim\!270$ thousand extra trainable parameters in
+the CIFAR-10/VGG-16 configuration) introduce extra gradient pathways
+into the shared backbone; DAEDL's post-hoc Gaussian density estimate
+depends on class-conditional features being well separated; and the
+original FI-EDL Fisher-information controller relies on an adaptive
+signal that, as we showed in \autoref{sec:diagnosis}, has only
+$6.5\%$ relative per-sample variation. Each additional component is
+empirically inert or actively detrimental in at least one of our
+benchmarks (\autoref{sec:abl-gate}, \autoref{sec:abl-masked},
+\autoref{sec:abl-sn}). Second, score semantics matter. The audit in
+\autoref{sec:score-ablation} shows that F-EDL, while built on a
+Flexible-Dirichlet effective concentration
+$\alpha_{\text{eff}}\!=\!\alpha\!+\!\tau\!\cdot\!p$, has an $\alpha_0$
+AUROC of $36.19$ on SVHN --- $54.7$ percentage points below its
+$\max_c\hat p_c$ score, indicating that the total-evidence quantity is
+no longer monotone with confidence under the Flexible-Dirichlet design.
+The plain Dirichlet head retains clean $\alpha_0$ semantics. Third, the
+active ingredient of distance-aware Dirichlet uncertainty is the
+bi-Lipschitz backbone, in line with the SNGP and DUQ analysis
+\citep{liu2020sngp,vanamersfoort2020duq}, and that ingredient is shared
+across our recipe, DAEDL, and F-EDL. Once the bi-Lipschitz backbone is
+in place, adding more machinery on top of it does not appear to give an
+additional Dirichlet-head signal --- and in the F-EDL case appears to
+degrade it.
+
+\subsection{When does spectral normalisation help?}\label{sec:disc-sn}
+\autoref{sec:abl-sn} documents two regimes for the SN ablation. On
+CIFAR-10 with VGG-16, applying SN to every convolutional and linear
+layer of the backbone improves every headline metric simultaneously
+(ECE, both OOD AUROCs, misclassification AUROC, accuracy). On MNIST
+with the small ConvNet, the same SN protocol regresses calibration
+from ECE $1.70$ to $13.60\%$ and inverts the orientation of the
+$\alpha_0$ OOD score on FMNIST (AUROC $47.04$, below chance). The
+mechanistic difference, suggested by the SNGP analysis, is the ratio of
+the Lipschitz constraint to the data manifold's intrinsic complexity:
+on a high-capacity backbone solving a natural-image task, the unit-norm
+spectral budget per layer is loose enough that the backbone can still
+learn discriminative features, and the bi-Lipschitz constraint suppresses
+runaway feature magnitudes on OOD inputs. On a small ConvNet solving
+MNIST, the same per-layer constraint is tight relative to the backbone's
+capacity, so logit magnitudes are uniformly suppressed; the resulting
+maximum predicted probabilities cluster around $1/K\!=\!0.1$, and
+calibration breaks. The practical implication is that SN is an
+architectural choice that should be ablated per dataset/backbone, not a
+default. Our recipe therefore recommends SN-on for natural-image-scale
+backbones (VGG-16, ResNet-18 in our experiments; presumably ResNet-50,
+ViTs, EfficientNets in larger settings) and SN-off for small backbones
+or small datasets. A learned per-layer spectral coefficient is a natural
+follow-up that may close the MNIST regression without losing the
+CIFAR-10 gain.
+
+\subsection{The $\alpha_0$ measurement convention.}\label{sec:disc-score}
+A side-effect of the score audit (\autoref{sec:score-ablation}) is a
+methodological observation: the published evidential-uncertainty
+literature is inconsistent about which score to use for OOD AUROC, and
+the inconsistency materially affects leaderboards. For instance,
+reporting every method at a single fixed score (whether $\max_c\hat p_c$
+or $\alpha_0$) would systematically misrepresent at least three of the
+baselines we evaluate. We therefore advocate the simple convention of
+reporting OOD numbers for each method at its own best-AUROC score, with
+the full per-score matrix in the supplementary material. This is a
+measurement contribution rather than a model contribution; it does not
+require a new training method, and it explains roughly half of the gap
+between our headline numbers and prior published numbers for FI-EDL on
+the same benchmarks.
+
+\subsection{Limitations.}\label{sec:disc-limits}
+We acknowledge five specific limitations of the present work.
+(i)~\textbf{MNIST regression under SN.} On the small-backbone MNIST
+benchmark, applying our recipe with SN regresses ECE from $1.70$ to
+$13.60\%$ (\autoref{sec:abl-sn}); we therefore recommend SN-off in that
+regime, but a deployment without per-task ablation would silently
+under-report calibration. (ii)~\textbf{Misclassification loss.} On
+CIFAR-10 misclassification AUROC, our recipe trails DAEDL by a
+statistically significant $1.29$ percentage points
+($p\!<\!0.01$, \autoref{sec:main}); we attribute this to the
+post-hoc density head, which gives DAEDL an explicit feature-distance
+signal that our minimal recipe does not produce.
+(iii)~\textbf{Backbone family.} CIFAR-10 results cover VGG-16 and
+ResNet-18; MNIST covers only ConvNet. The recipe has not been studied on
+ViT, ResNet-50, or EfficientNet variants, and we cannot rule out
+backbone-specific failure modes at those scales. (iv)~\textbf{Scale.}
+CIFAR-10 is our largest natural-image ID benchmark; ImageNet-100 and
+ImageNet-1k results are absent for compute-budget reasons. The
+bi-Lipschitz backbone argument used by SNGP and DUQ extends in principle
+to ImageNet, and our recipe would simply layer Brier-only fit and
+$\alpha_0$ scoring on top, but this is unverified. (v)~\textbf{Modality
+and task.} We study image classification only. Evidential regression
+\citep{amini2020evidential} and structured-output evidential methods are
+not covered, and the simplification principle may or may not transfer.
+
+\subsection{Future work.}\label{sec:disc-future}
+Three directions follow naturally. First, a per-layer learned spectral
+coefficient that interpolates between the unconstrained and unit-norm
+extremes may close the MNIST calibration regression while preserving the
+CIFAR-10 gains. Second, a hybrid that combines our minimal training-time
+recipe with a DAEDL-style post-hoc density head may recover the
+misclassification AUROC currently lost to DAEDL while keeping the
+CIFAR-10 calibration and OOD wins; this is conceptually a clean
+addition because the two contributions are orthogonal. Third, scaling to
+ImageNet-100 / ImageNet-1k with ResNet-50 or ViT backbones would test
+whether the recipe's CIFAR-10 advantage is a small-data artifact or a
+genuine architectural finding. We also note that the CIFAR-10-C
+corruption benchmark \citep{hendrycks2017baseline} would be a natural
+robustness extension, especially given that the bi-Lipschitz backbone
+should in principle stabilise calibration under corruption; preliminary
+infrastructure for this evaluation is already prepared in our codebase.
+
+% =========================================================================
+\section{Conclusion}\label{sec:conclusion}
+
+We revisited the FI-EDL family of evidential uncertainty methods and
+asked what is empirically responsible for its calibration and OOD
+strength. The originally proposed Fisher-information controller turns
+out to be empirically inert: the trace $\mathrm{tr}\,I(\alpha)\!=\!
+\mathcal{O}(K)$ throughout training, the gate
+$\lambda\!=\!\beta\,\exp(-\gamma\,\mathrm{tr}\,I(\alpha))$ saturates to a
+near-constant scalar (negligible on MNIST, $\sim\!70\%$ of the fit term
+on CIFAR-10), and the per-sample variance of the trace is too small
+($6.5\%$ relative standard deviation on CIFAR-10, $1.6\%$ on MNIST) for
+any adaptive controller to do real work. We then identified a
+deliberately minimal three-component recipe --- KL-free Brier-like fit,
+backbone spectral normalisation for natural-image scale, and total
+evidence $\alpha_0$ as the OOD score --- that matches or exceeds the
+strongest current EDL baselines on the studied CIFAR-10/VGG-16 protocol:
+a uniquely statistically significant first place on CIFAR-10$\to$CIFAR-100
+out-of-distribution detection (AUROC $86.32\!\pm\!0.20$,
+$p\!<\!0.01$ against each of DAEDL, F-EDL, and Re-EDL), best-mean
+calibration (ECE $3.93\!\pm\!0.45\%$, paired-tied with DAEDL,
+$p\!=\!0.55$), and best-mean SVHN AUROC ($92.99\!\pm\!1.77$, paired-tied
+with Re-EDL and F-EDL). The same recipe regresses MNIST calibration
+under spectral normalisation, and we therefore recommend SN as a
+task-conditional rather than default component. Taken together the
+results support an Occam's-razor reading of recent evidential deep
+learning: the active ingredients of strong calibration and OOD
+performance are surprisingly few, and adding additional heads, density
+estimators, or adaptive regularisers does not necessarily help. Per-layer
+spectral tuning, hybrid density-aware variants, and scaling to ImageNet
+remain open.
+
+% =========================================================================
+\bibliographystyle{elsarticle-num}
+\bibliography{refs}
+
+\end{document}

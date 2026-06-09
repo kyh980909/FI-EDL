@@ -15,11 +15,11 @@ overrides:
   - optimizer.lr=0.0005
   - trainer.precision=32-true
   - trainer.early_stopping=true
-  - trainer.early_stopping_monitor=val/loss
-  - trainer.early_stopping_mode=min
+  - trainer.early_stopping_monitor=val/acc
+  - trainer.early_stopping_mode=max
   - trainer.early_stopping_patience=20
   - eval.confidence_scores=[maxp,maxalpha]
   - logging.wandb.enabled=true
   - loss.lambda_prior=0.8
-  - logging.wandb.project=FI-EDL-CIFAR10
+  - logging.wandb.project=FI-EDL-CIFAR10-v2
   - logging.local_dir=runs/cifar10

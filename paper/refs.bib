@@ -1,0 +1,323 @@
+% FI-EDL Neurocomputing — bibliography
+% Maintained by fi-edl-litscout. Do not add citations without reading the abstract.
+% BibTeX key convention: firstauthor_year_short (lowercase, underscores).
+% Mark scoop risks with `% RISK: potential scoop` above the entry.
+
+% =========================================================================
+% Entries below verified by abstract (or paper) read between 2026-05-29.
+% Each was checked against arXiv/proceedings page; author orders match.
+% =========================================================================
+
+% --- EDL lineage ---
+
+@inproceedings{sensoy2018edl,
+  title     = {Evidential Deep Learning to Quantify Classification Uncertainty},
+  author    = {Sensoy, Murat and Kaplan, Lance and Kandemir, Melih},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2018},
+  url       = {https://arxiv.org/abs/1806.01768},
+}
+
+@inproceedings{malinin2018prior,
+  title     = {Predictive Uncertainty Estimation via Prior Networks},
+  author    = {Malinin, Andrey and Gales, Mark},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2018},
+  url       = {https://arxiv.org/abs/1802.10501},
+}
+
+@inproceedings{amini2020evidential,
+  title     = {Deep Evidential Regression},
+  author    = {Amini, Alexander and Schwarting, Wilko and Soleimany, Ava and Rus, Daniela},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2020},
+  url       = {https://arxiv.org/abs/1910.02600},
+}
+
+% Note: "I-EDL" in the FI-EDL paper refers to the Fisher Information-based
+% EDL of Deng et al. (ICML 2023), not a 2021 paper. The original task brief
+% said 2021; the actual venue is ICML 2023. Verified on arXiv 2303.02045
+% and PMLR v202.
+@inproceedings{deng2023iedl,
+  title     = {Uncertainty Estimation by {F}isher Information-based Evidential Deep Learning},
+  author    = {Deng, Danruo and Chen, Guangyong and Yu, Yang and Liu, Furui and Heng, Pheng-Ann},
+  booktitle = {Proceedings of the 40th International Conference on Machine Learning (ICML)},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {202},
+  pages     = {7596--7616},
+  year      = {2023},
+  publisher = {PMLR},
+  url       = {https://arxiv.org/abs/2303.02045},
+}
+
+@inproceedings{chen2024redl,
+  title     = {{R-EDL}: Relaxing Nonessential Settings of Evidential Deep Learning},
+  author    = {Chen, Mengyuan and Gao, Junyu and Xu, Changsheng},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  note      = {Spotlight},
+  year      = {2024},
+  url       = {https://openreview.net/forum?id=Si3YFA641c},
+}
+
+% Journal extension of R-EDL by the same authors. Re-EDL drops the KL
+% regularizer and treats the prior weight as an adjustable hyperparameter.
+% RESOLVED 2026-05-29: now accepted at IEEE TPAMI 2025 (per the authors'
+% official GitHub repo MengyuanChen21/Re-EDL header "[TPAMI 2025] ..." and
+% IEEE Xplore document 11052867). Exact volume/pages not yet listed in
+% Xplore preview; the bibentry is journal-ready with year=2025. Writer:
+% remove any "preprint" caveat on first citation; this is now a journal
+% publication.
+@article{chen2025reedl,
+  title     = {Revisiting Essential and Nonessential Settings of Evidential Deep Learning},
+  author    = {Chen, Mengyuan and Gao, Junyu and Xu, Changsheng},
+  journal   = {IEEE Transactions on Pattern Analysis and Machine Intelligence},
+  year      = {2025},
+  note      = {Accepted; volume and pages forthcoming},
+  url       = {https://ieeexplore.ieee.org/document/11052867},
+}
+
+% RISK: potential scoop — DAEDL already applies spectral normalization to
+% the feature extractor for distance-aware EDL. See related_work_notes.md
+% "Risk: potential scoop" section for our positioning.
+@inproceedings{yoon2024daedl,
+  title     = {Uncertainty Estimation by Density Aware Evidential Deep Learning},
+  author    = {Yoon, Taeseong and Kim, Heeyoung},
+  booktitle = {Proceedings of the 41st International Conference on Machine Learning (ICML)},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {235},
+  pages     = {57217--57243},
+  year      = {2024},
+  publisher = {PMLR},
+  url       = {https://arxiv.org/abs/2409.08754},
+}
+
+% RISK: potential scoop — F-EDL (Flexible EDL) applies spectral
+% normalization to f_theta and g_phi1 and replaces the KL penalty with a
+% Brier-score-based regularizer. This is the most direct overlap with
+% FI-EDL+SN. See related_work_notes.md for differentiation.
+% Note: the project's earlier internal notes used "F-EDL" to refer to a
+% Fisher-information variant; the correct expansion of "F-EDL" in the
+% published 2025 paper is "Flexible EDL", not "Fisher EDL".
+@inproceedings{yoon2025fedl,
+  title     = {Uncertainty Estimation by Flexible Evidential Deep Learning},
+  author    = {Yoon, Taeseong and Kim, Heeyoung},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2025},
+  url       = {https://arxiv.org/abs/2510.18322},
+}
+
+% --- Calibration ---
+
+@inproceedings{guo2017calibration,
+  title     = {On Calibration of Modern Neural Networks},
+  author    = {Guo, Chuan and Pleiss, Geoff and Sun, Yu and Weinberger, Kilian Q.},
+  booktitle = {Proceedings of the 34th International Conference on Machine Learning (ICML)},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {70},
+  pages     = {1321--1330},
+  year      = {2017},
+  publisher = {PMLR},
+  url       = {https://arxiv.org/abs/1706.04599},
+}
+
+@inproceedings{mukhoti2020focal,
+  title     = {Calibrating Deep Neural Networks using Focal Loss},
+  author    = {Mukhoti, Jishnu and Kulharia, Viveka and Sanyal, Amartya and Golodetz, Stuart and Torr, Philip H. S. and Dokania, Puneet K.},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2020},
+  url       = {https://arxiv.org/abs/2002.09437},
+}
+
+% Recent train-time calibration (added 2026-05-29 for round-1 m6).
+% CALS (Class-Adaptive Label Smoothing) generalises label smoothing by
+% learning a per-class multiplier through an Augmented-Lagrangian penalty
+% with an inequality margin constraint on logit distances. Cited as
+% representative 2023+ train-time calibration work outside the evidential
+% family.
+@inproceedings{liu2023cals,
+  title     = {Class Adaptive Network Calibration},
+  author    = {Liu, Bingyuan and Rony, J{\'e}r{\^o}me and Galdran, Adrian and Dolz, Jose and Ben Ayed, Ismail},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {16070--16079},
+  year      = {2023},
+  url       = {https://arxiv.org/abs/2211.15088},
+}
+
+% --- OOD detection ---
+
+@inproceedings{hendrycks2017baseline,
+  title     = {A Baseline for Detecting Misclassified and Out-of-Distribution Examples in Neural Networks},
+  author    = {Hendrycks, Dan and Gimpel, Kevin},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2017},
+  url       = {https://arxiv.org/abs/1610.02136},
+}
+
+@inproceedings{liang2018odin,
+  title     = {Enhancing The Reliability of Out-of-distribution Image Detection in Neural Networks},
+  author    = {Liang, Shiyu and Li, Yixuan and Srikant, R.},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2018},
+  url       = {https://arxiv.org/abs/1706.02690},
+}
+
+@inproceedings{lee2018mahalanobis,
+  title     = {A Simple Unified Framework for Detecting Out-of-Distribution Samples and Adversarial Attacks},
+  author    = {Lee, Kimin and Lee, Kibok and Lee, Honglak and Shin, Jinwoo},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2018},
+  url       = {https://arxiv.org/abs/1807.03888},
+}
+
+@inproceedings{liu2020sngp,
+  title     = {Simple and Principled Uncertainty Estimation with Deterministic Deep Learning via Distance Awareness},
+  author    = {Liu, Jeremiah Zhe and Lin, Zi and Padhy, Shreyas and Tran, Dustin and Bedrax-Weiss, Tania and Lakshminarayanan, Balaji},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2020},
+  url       = {https://arxiv.org/abs/2006.10108},
+}
+
+@inproceedings{sun2022knn,
+  title     = {Out-of-Distribution Detection with Deep Nearest Neighbors},
+  author    = {Sun, Yiyou and Ming, Yifei and Zhu, Xiaojin and Li, Yixuan},
+  booktitle = {Proceedings of the 39th International Conference on Machine Learning (ICML)},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {162},
+  year      = {2022},
+  publisher = {PMLR},
+  url       = {https://arxiv.org/abs/2204.06507},
+}
+
+% Recent post-hoc OOD detectors (added 2026-05-29 for round-1 m6).
+% ASH (Activation Shaping) prunes most activations at a late layer at
+% inference time and lightly adjusts the rest; achieves SOTA post-hoc
+% ImageNet OOD detection without any training-time intervention or
+% statistics from training data. ICLR 2023.
+@inproceedings{djurisic2023ash,
+  title     = {Extremely Simple Activation Shaping for Out-of-Distribution Detection},
+  author    = {Djurisic, Andrija and Bozanic, Nebojsa and Ashok, Arjun and Liu, Rosanne},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2023},
+  url       = {https://arxiv.org/abs/2209.09858},
+}
+
+% GEN: post-hoc softmax-based OOD score using generalised entropy
+% (a softer-than-Shannon entropy that emphasises sub-unit probabilities).
+% Applied to any pre-trained softmax classifier; +3.5% AUROC on average
+% over prior post-hoc methods on ImageNet-1k. CVPR 2023.
+@inproceedings{liu2023gen,
+  title     = {{GEN}: Pushing the Limits of Softmax-based Out-of-Distribution Detection},
+  author    = {Liu, Xixi and Lochman, Yaroslava and Zach, Christopher},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {23946--23955},
+  year      = {2023},
+  url       = {https://openaccess.thecvf.com/content/CVPR2023/html/Liu_GEN_Pushing_the_Limits_of_Softmax-Based_Out-of-Distribution_Detection_CVPR_2023_paper.html},
+}
+
+% --- Spectral normalization & Lipschitz ---
+
+@inproceedings{miyato2018sngan,
+  title     = {Spectral Normalization for Generative Adversarial Networks},
+  author    = {Miyato, Takeru and Kataoka, Toshiki and Koyama, Masanori and Yoshida, Yuichi},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2018},
+  url       = {https://arxiv.org/abs/1802.05957},
+}
+
+@inproceedings{vanamersfoort2020duq,
+  title     = {Uncertainty Estimation Using a Single Deep Deterministic Neural Network},
+  author    = {van Amersfoort, Joost and Smith, Lewis and Teh, Yee Whye and Gal, Yarin},
+  booktitle = {Proceedings of the 37th International Conference on Machine Learning (ICML)},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {119},
+  year      = {2020},
+  publisher = {PMLR},
+  url       = {https://arxiv.org/abs/2003.02037},
+}
+
+@inproceedings{bartlett2017spectrally,
+  title     = {Spectrally-normalized Margin Bounds for Neural Networks},
+  author    = {Bartlett, Peter L. and Foster, Dylan J. and Telgarsky, Matus J.},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2017},
+  url       = {https://arxiv.org/abs/1706.08498},
+}
+
+% =========================================================================
+% Scoop-scan (2024–2026): work that overlaps with our FI-EDL + SN + alpha0
+% recipe. Direct overlaps are marked RISK above and discussed in
+% related_work_notes.md. Items below are adjacent / domain-specific but
+% recorded for completeness.
+% =========================================================================
+
+% Domain-specific (dynamic graphs); not a direct scoop but uses
+% evidential + spectrum-aware ideas for OOD.
+% RESOLVED 2026-05-29: replaced author=Anonymous with verified author
+% list from arXiv 2506.07417 (Sun, Lin, Zhou, Shang, Cheng, Cao) and
+% confirmed ECML-PKDD 2025 acceptance via the arXiv landing page note
+% "Accepted by ECML-PKDD 2025". Listing as @inproceedings with the
+% ECML-PKDD 2025 booktitle; arXiv URL kept for accessibility.
+@inproceedings{sun2025evisec,
+  title     = {Evidential Spectrum-Aware Contrastive Learning for {OOD} Detection in Dynamic Graphs},
+  author    = {Sun, Nan and Lin, Xixun and Zhou, Zhiheng and Shang, Yanmin and Cheng, Zhenlin and Cao, Yanan},
+  booktitle = {Proceedings of the European Conference on Machine Learning and Principles and Practice of Knowledge Discovery in Databases (ECML PKDD)},
+  year      = {2025},
+  url       = {https://arxiv.org/abs/2506.07417},
+}
+
+% RISK: potential scoop — GEM-FI (Gated Evidential Mixtures with Fisher
+% Modulation), ICML 2026. Uses an energy-gated mixture of evidential
+% heads stabilised by a Fisher-informed regularizer; no spectral
+% normalization mentioned, but the "Fisher-informed regularizer" naming
+% overlaps with our FI in FI-EDL. Differentiation: GEM-FI uses Fisher as
+% an allocator-regularizer over a mixture-of-heads; FI-EDL uses Fisher
+% information of the Dirichlet on the per-sample loss. See
+% related_work_notes.md "Risk: potential scoop" for the full diff.
+@article{mohammed2026gemfi,
+  title     = {{GEM-FI}: Gated Evidential Mixtures with Fisher Modulation},
+  author    = {Mohammed, Marco Mustafa and Daneshfar, Fatemeh and Li{\`o}, Pietro},
+  journal   = {arXiv preprint arXiv:2605.03750},
+  note      = {Accepted at ICML 2026},
+  year      = {2026},
+  url       = {https://arxiv.org/abs/2605.03750},
+}
+
+% Domain-specific (hyperspectral imaging); EDL + spectral-spatial
+% disentanglement, not spectral *normalization*. Listed for completeness.
+@article{khoshbakht2025hyperspectral,
+  title     = {Open-Set Domain Generalization through Spectral-Spatial Uncertainty Disentanglement for Hyperspectral Image Classification},
+  author    = {Khoshbakht, Amirreza and Aptoula, Erchan},
+  journal   = {arXiv preprint arXiv:2506.09460},
+  year      = {2025},
+  url       = {https://arxiv.org/abs/2506.09460},
+}
+
+% --- OOD benchmark dataset (added 2026-05-30 by main agent) ---
+@inproceedings{cimpoi2014describing,
+  title     = {Describing Textures in the Wild},
+  author    = {Cimpoi, Mircea and Maji, Subhransu and Kokkinos, Iasonas and Mohamed, Sammy and Vedaldi, Andrea},
+  booktitle = {IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {3606--3613},
+  year      = {2014},
+  url       = {https://arxiv.org/abs/1311.3618},
+}
+
+% --- GTSRB dataset (added 2026-06-03) ---
+@article{stallkamp2012gtsrb,
+  title     = {Man vs.\ Computer: Benchmarking Machine Learning Algorithms for Traffic Sign Recognition},
+  author    = {Stallkamp, J. and Schlipsing, M. and Salmen, J. and Igel, C.},
+  journal   = {Neural Networks},
+  volume    = {32},
+  pages     = {323--332},
+  year      = {2012},
+  doi       = {10.1016/j.neunet.2012.02.016},
+}
+
+% --- CIFAR-10-C robustness benchmark (added 2026-06-03) ---
+@inproceedings{hendrycks2019benchmarking,
+  title     = {Benchmarking Neural Network Robustness to Common Corruptions and Perturbations},
+  author    = {Hendrycks, Dan and Dietterich, Thomas},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2019},
+  url       = {https://arxiv.org/abs/1903.12261},
+}

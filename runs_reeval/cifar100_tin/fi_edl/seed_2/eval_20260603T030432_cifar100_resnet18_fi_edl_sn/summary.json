@@ -1,0 +1,18 @@
+{
+  "results_schema_version": "v1",
+  "config_hash": "235a3c335c96",
+  "summary": {
+    "checkpoint": "/home/yongho/FI-EDL/runs/cifar100/fi_edl/seed_2/train_20260602T082553_cifar100_resnet18_fi_edl_sn/checkpoints/best.ckpt",
+    "seed": 2,
+    "experiment": "fi_edl",
+    "id_accuracy": 0.6844000220298767,
+    "calibration": "none",
+    "temperature": 1.0,
+    "scores": [
+      "maxp",
+      "alpha0",
+      "vacuity",
+      "fisher"
+    ]
+  }
+}

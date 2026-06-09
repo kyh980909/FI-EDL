@@ -3,7 +3,8 @@
 # Re-EDL은 lambda_prior=0.1 (MNIST default)이므로 여기에 포함.
 #
 # Protocol: ConvNet, 200 epochs, batch=64, lr=1e-3, val_split=20%,
-# early stopping (patience=20 on val/loss).
+# early stopping (patience=20 on val/acc, since val/loss is dominated by the
+# 10-epoch KL annealing and is monotonically increasing once lam ramps in).
 
 methods: [edl_l1, i_edl, r_edl, re_edl, daedl, f_edl, fi_edl]
 seeds: [0, 1, 2, 3, 4]
@@ -18,10 +19,10 @@ overrides:
   - optimizer.lr=0.001
   - trainer.precision=32-true
   - trainer.early_stopping=true
-  - trainer.early_stopping_monitor=val/loss
-  - trainer.early_stopping_mode=min
+  - trainer.early_stopping_monitor=val/acc
+  - trainer.early_stopping_mode=max
   - trainer.early_stopping_patience=20
   - eval.confidence_scores=[maxp,maxalpha]
   - logging.wandb.enabled=true
-  - logging.wandb.project=FI-EDL-MNIST
+  - logging.wandb.project=FI-EDL-MNIST-v2
   - logging.local_dir=runs/mnist

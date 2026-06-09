@@ -14,3 +14,15 @@ loss:
   info_type: fisher
   gate_type: exp
   detach_weight: true
+  # Scale the control signal before the exp gate. With "none" and the raw
+  # Fisher trace (≈O(K)≈14.5), exp(-gamma·trace)≈5e-7 → gate saturates OFF
+  # (no KL regularisation). "div_k" or "batch_z" restore a usable range.
+  signal_norm: none
+  # Linear KL warmup 0→1 over this many epochs (standard EDL; prevents the
+  # Dirichlet collapsing to uniform before the backbone learns features).
+  anneal_epochs: 10.0
+  # If true, compute KL on alpha_hat = alpha·(1-y) + y so the target-class
+  # evidence is excluded from the uniform-prior penalty (standard EDL masking).
+  # Without it, restoring the gate destroys calibration (ECE 5%→71%); see
+  # results/baseline_comparison_report.md §6.6 Stage-1 sweep.
+  kl_target_mask: false

@@ -12,10 +12,12 @@ from src.registry import BACKBONE_REGISTRY, HEAD_REGISTRY, LOSS_REGISTRY, SCORE_
 
 LOSS_ALLOWED_KEYS = {
     "edl_fixed": {"name", "lambda_value", "anneal_epochs"},
-    "fi_edl": {"name", "beta", "gamma", "info_type", "gate_type", "detach_weight"},
+    "fi_edl": {"name", "beta", "gamma", "info_type", "gate_type", "detach_weight", "signal_norm", "anneal_epochs", "kl_target_mask"},
     "i_edl": {"name", "lambda_kl", "lambda_logdet", "fisher_c", "kl_anneal_epochs", "anneal_epochs"},
     "r_edl": {"name", "lambda_prior"},
     "re_edl": {"name", "lambda_prior"},
+    "daedl": {"name", "lambda_value"},
+    "f_edl": {"name"},
 }
 
 LOSS_REQUIRED_KEYS = {
@@ -24,6 +26,8 @@ LOSS_REQUIRED_KEYS = {
     "i_edl": {"name", "lambda_kl", "lambda_logdet", "fisher_c", "kl_anneal_epochs"},
     "r_edl": {"name", "lambda_prior"},
     "re_edl": {"name", "lambda_prior"},
+    "daedl": {"name", "lambda_value"},
+    "f_edl": {"name"},
 }
 
 

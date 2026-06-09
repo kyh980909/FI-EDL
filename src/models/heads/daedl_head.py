@@ -115,7 +115,12 @@ class DAEDLHead(nn.Module):
             centered = fc - mu_c.unsqueeze(0)                      # [n_c, D]
             cov_c = centered.T.mm(centered) / (n_c - 1)            # Bessel correction
 
-            # Progressive jitter: increase until Cholesky succeeds
+            # Progressive jitter: increase until Cholesky succeeds with a
+            # numerically usable diagonal. Rank-deficient covariance (e.g. dead
+            # ReLU dims) gives tiny (~1e-45) or zero diagonals; the resulting
+            # triangular solve produces NaN/inf maha distances, which leak NaN
+            # into log densities downstream. Require ≥ MIN_DIAG.
+            MIN_DIAG = 1e-3
             for jitter in _JITTERS:
                 try:
                     jitter_mat = jitter * torch.eye(D, dtype=torch.double, device=device)
@@ -123,8 +128,10 @@ class DAEDLHead(nn.Module):
                         loc=mu_c,
                         covariance_matrix=cov_c + jitter_mat,
                     )
-                    scale_trils[c] = dist.scale_tril.float()
-                    break
+                    L = dist.scale_tril.float()
+                    if L.diagonal().min().item() >= MIN_DIAG:
+                        scale_trils[c] = L
+                        break
                 except (RuntimeError, ValueError):
                     continue
 
@@ -148,16 +155,16 @@ class DAEDLHead(nn.Module):
         Formula: -0.5 * [D*log(2π) + 2*log|L_c| + ||L_c^{-1}(z - μ_c)||²]
         """
         B, D = features.shape
-        diff = features.unsqueeze(1) - self.gmm_means.unsqueeze(0)   # [B, K, D]
+        K = self.num_classes
 
-        # Triangular solve: v = L_c^{-1} (z - μ_c)  for all classes at once
-        # scale_trils: [K, D, D], expand to [B, K, D, D]
-        L = self.gmm_scale_trils.unsqueeze(0).expand(B, -1, -1, -1)  # [B, K, D, D]
-        v = torch.linalg.solve_triangular(
-            L, diff.unsqueeze(-1), upper=False
-        ).squeeze(-1)                                                  # [B, K, D]
-
-        maha = v.pow(2).sum(dim=-1)                                   # [B, K]
+        # Solve per class to avoid materialising [B, K, D, D] (≈125 GB at B=48k, D=256).
+        maha = torch.empty(B, K, device=features.device, dtype=features.dtype)
+        for c in range(K):
+            diff_c = features - self.gmm_means[c]                              # [B, D]
+            v_c = torch.linalg.solve_triangular(
+                self.gmm_scale_trils[c], diff_c.t(), upper=False
+            ).t()                                                              # [B, D]
+            maha[:, c] = v_c.pow(2).sum(dim=-1)
 
         # log|Σ_c| = 2 * Σ_d log L_c[d,d]
         log_dets = (

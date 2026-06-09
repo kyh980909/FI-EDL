@@ -1,0 +1,18 @@
+{
+  "results_schema_version": "v1",
+  "config_hash": "6001d16ccaec",
+  "summary": {
+    "checkpoint": "/home/yongho/FI-EDL/runs/mnist/fi_edl/seed_3/train_20260514T151357_mnist_convnet/checkpoints/best.ckpt",
+    "seed": 3,
+    "experiment": "fi_edl",
+    "id_accuracy": 0.9926999807357788,
+    "calibration": "none",
+    "temperature": 1.0,
+    "scores": [
+      "maxp",
+      "alpha0",
+      "vacuity",
+      "fisher"
+    ]
+  }
+}

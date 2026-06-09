@@ -2,7 +2,9 @@
 # Re-EDL MNIST uses lambda_prior=0.1 (shared default), so it is included here.
 #
 # Protocol: ConvNet, 200 epochs, batch=64, lr=1e-3, val_split=20%,
-# early stopping on val/loss with patience=20.
+# early stopping on val/acc with patience=20 (val/loss includes KL term that
+# anneals 0->1 over 10 epochs and is monotonically increasing once lam ramps in,
+# which breaks min-monitoring; val/acc is a robust replacement).
 
 methods: [edl_l1, i_edl, r_edl, re_edl, fi_edl]
 seeds: [0, 1, 2, 3, 4]
@@ -17,10 +19,10 @@ overrides:
   - optimizer.lr=0.001
   - trainer.precision=32-true
   - trainer.early_stopping=true
-  - trainer.early_stopping_monitor=val/loss
-  - trainer.early_stopping_mode=min
+  - trainer.early_stopping_monitor=val/acc
+  - trainer.early_stopping_mode=max
   - trainer.early_stopping_patience=20
   - eval.confidence_scores=[maxp,maxalpha]
   - logging.wandb.enabled=true
-  - logging.wandb.project=FI-EDL-MNIST
+  - logging.wandb.project=FI-EDL-MNIST-v2
   - logging.local_dir=runs/mnist

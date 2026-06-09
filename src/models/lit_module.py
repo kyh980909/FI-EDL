@@ -55,6 +55,9 @@ def _loss_kwargs(cfg) -> Dict[str, Any]:
             "info_type": cfg.loss.info_type,
             "gate_type": cfg.loss.gate_type,
             "detach_weight": cfg.loss.detach_weight,
+            "signal_norm": getattr(cfg.loss, "signal_norm", "none"),
+            "anneal_epochs": getattr(cfg.loss, "anneal_epochs", 10.0),
+            "kl_target_mask": getattr(cfg.loss, "kl_target_mask", False),
         }
     if loss_name == "i_edl":
         return {

@@ -1,0 +1,25 @@
+# CIFAR-100 + FI-EDL+SN (the extension's recipe) — ResNet-18, 5 seeds.
+# Matches F-EDL's CIFAR-100/ResNet-18 setup (Yoon 2025 Appendix E.2).
+methods: [fi_edl]
+seeds: [0, 1, 2, 3, 4]
+run_eval: true
+overrides:
+  - dataset=cifar100
+  - backbone=resnet18
+  - model.backbone_spectral_norm=true
+  - trainer.max_epochs=200
+  - data.batch_size=64
+  - data.val_from_train=true
+  - data.val_split=0.05
+  - optimizer.lr=0.0005
+  - trainer.precision=32-true
+  - trainer.early_stopping=true
+  - trainer.early_stopping_monitor=val/acc
+  - trainer.early_stopping_mode=max
+  - trainer.early_stopping_patience=20
+  - eval.scores=[maxp,alpha0,vacuity,fisher]
+  - eval.confidence_scores=[maxp,maxalpha,alpha0,fisher]
+  - logging.wandb.enabled=true
+  - logging.wandb.project=FI-EDL-CIFAR100-resnet
+  - logging.local_dir=runs/cifar100
+  - experiment.method_variant=fi_edl_sn

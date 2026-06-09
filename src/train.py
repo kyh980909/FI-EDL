@@ -239,6 +239,10 @@ def run_train(cfg: DictConfig) -> None:
         logger=_build_loggers(cfg, run_name=collector.run_name, run_dir=collector.run_dir),
         callbacks=callbacks,
         deterministic=bool(OmegaConf.select(cfg, "trainer.deterministic", default=True)),
+        # Sanity check runs in eval mode; for SN'd backbones (DAEDL/F-EDL) the
+        # power-iteration buffers haven't been refined yet, so eval-mode forward
+        # explodes (exp of un-normalised logits) and NaN-stops the run.
+        num_sanity_val_steps=0,
     )
 
     trainer.fit(model, datamodule=datamodule, ckpt_path=resume_ckpt)

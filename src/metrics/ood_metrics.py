@@ -53,6 +53,18 @@ def multiclass_nll(probs: np.ndarray, labels: np.ndarray, eps: float = 1e-12) ->
     return float(-np.log(p).mean())
 
 
+def multiclass_brier(probs: np.ndarray, labels: np.ndarray) -> float:
+    """Multiclass Brier score, lower is better.
+
+    BS = (1/N) Σ_n Σ_c (y_{n,c} − p_{n,c})^2 with y one-hot and p the mean
+    Dirichlet probability (same p̂ used for ECE/NLL). Range [0, 2].
+    """
+    n, k = probs.shape
+    onehot = np.zeros((n, k), dtype=np.float64)
+    onehot[np.arange(n), labels] = 1.0
+    return float(((probs.astype(np.float64) - onehot) ** 2).sum(axis=1).mean())
+
+
 def multiclass_ece(probs: np.ndarray, labels: np.ndarray, n_bins: int = 15) -> float:
     conf = probs.max(axis=1)
     pred = probs.argmax(axis=1)

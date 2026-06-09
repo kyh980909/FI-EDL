@@ -84,10 +84,24 @@ class CIFAR10Adapter(DatasetAdapter):
             "test": make_deterministic_loader(test_ds, batch_size=batch_size, num_workers=num_workers, shuffle=False, seed=self.seed),
         }
 
+    def _ood_resize_eval_tf(self) -> transforms.Compose:
+        """Eval transform for OOD datasets with native resolution > 32x32.
+        Resize then center-crop to 32x32 to match CIFAR-10 input size.
+        Used for DTD (Textures), Places365 etc."""
+        items: list = [
+            transforms.Resize(36),
+            transforms.CenterCrop(32),
+            transforms.ToTensor(),
+        ]
+        if self.normalize:
+            items.append(transforms.Normalize(self._norm.mean, self._norm.std))
+        return transforms.Compose(items)
+
     def ood_dataloaders(
         self, names: Iterable[str], batch_size: int, num_workers: int
     ) -> Dict[str, DataLoader]:
         eval_tf = self._eval_tf()
+        resize_tf = self._ood_resize_eval_tf()
         out: Dict[str, DataLoader] = {}
         for name in names:
             key = str(name).lower()
@@ -95,6 +109,34 @@ class CIFAR10Adapter(DatasetAdapter):
                 ds = datasets.SVHN(self.root, split="test", download=True, transform=eval_tf)
             elif key == "cifar100":
                 ds = datasets.CIFAR100(self.root, train=False, download=True, transform=eval_tf)
+            elif key in ("dtd", "textures"):
+                # Describable Textures Dataset — standard Hendrycks OOD benchmark.
+                # ~1880 test images at variable native resolution; resize-then-crop to 32x32.
+                ds = datasets.DTD(self.root, split="test", download=True, transform=resize_tf)
+            elif key in ("places365", "places"):
+                # Places365 (small variant). Heavy download; only enable if needed.
+                ds = datasets.Places365(
+                    self.root, split="val", small=True, download=True, transform=resize_tf
+                )
+            elif key == "gtsrb":
+                # German Traffic Sign Recognition Benchmark — Re-EDL CIFAR-10 OOD #3.
+                # ~12 630 test traffic-sign images; resize-then-crop to 32x32.
+                ds = datasets.GTSRB(
+                    self.root, split="test", download=True, transform=resize_tf,
+                )
+            elif key in ("lfw", "lfwpeople", "lfw_people"):
+                # Labeled Faces in the Wild — Re-EDL CIFAR-10 OOD #4. ~13 233 faces,
+                # 250x250 native resolution; resize-then-crop to 32x32.
+                ds = datasets.LFWPeople(
+                    self.root, split="test", image_set="funneled",
+                    download=True, transform=resize_tf,
+                )
+            elif key == "food101":
+                # Food-101 — Re-EDL CIFAR-10 OOD #6. ~25 250 food test images,
+                # variable resolution; resize-then-crop to 32x32.
+                ds = datasets.Food101(
+                    self.root, split="test", download=True, transform=resize_tf,
+                )
             else:
                 raise ValueError(f"Unsupported OOD dataset for CIFAR-10 ID: {name}")
             out[name] = make_deterministic_loader(ds, batch_size=batch_size, num_workers=num_workers, shuffle=False, seed=self.seed)

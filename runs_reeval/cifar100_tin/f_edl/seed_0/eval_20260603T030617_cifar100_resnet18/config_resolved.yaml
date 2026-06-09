@@ -1,0 +1,74 @@
+seed: 0
+checkpoint: runs/cifar100/f_edl/seed_0/train_20260602T165814_cifar100_resnet18/checkpoints/best.ckpt
+model:
+  head: f_edl
+  num_classes: 100
+  pretrained: false
+  evidence_fn: softplus
+  backbone_spectral_norm: true
+  head_num_layers: 2
+  head_hidden_dim: 256
+  backbone: resnet18
+score:
+  name: vacuity
+eval:
+  scores:
+  - maxp
+  - alpha0
+  - vacuity
+  - fisher
+  confidence_scores:
+  - maxp
+  calibration: none
+  temperature: 1.0
+optimizer:
+  name: adam
+  lr: 0.001
+  momentum: 0.9
+  weight_decay: 0.0
+scheduler:
+  name: none
+  warmup_epochs: 0
+  step_size: 30
+  gamma: 0.1
+trainer:
+  max_epochs: 100
+  accelerator: auto
+  devices: 1
+  precision: 32-true
+  log_every_n_steps: 50
+  early_stopping: false
+  early_stopping_monitor: val/loss
+  early_stopping_mode: min
+  early_stopping_patience: 20
+  deterministic: true
+logging:
+  local_dir: runs_reeval/cifar100_tin
+  wandb:
+    enabled: false
+    project: fi-edl
+    entity: null
+    tags: []
+    mode: online
+    log_model: false
+experiment:
+  name: f_edl
+  method_variant: f_edl
+loss:
+  name: f_edl
+data:
+  root: ./data
+  id: cifar100
+  ood_list:
+  - tinyimagenet
+  - dtd
+  batch_size: 128
+  num_workers: 2
+  val_from_train: false
+  val_split: 0.0
+  normalize: true
+  image_size: 32
+  grayscale_to_rgb: false
+  random_crop_padding: 0
+  random_rotation_degrees: 0.0
+  val_use_train_transform: false

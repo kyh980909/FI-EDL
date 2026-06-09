@@ -1,4 +1,4 @@
-"""Lightning DataModule that dispatches to MNIST or CIFAR-10 adapters."""
+"""Lightning DataModule that dispatches to MNIST / CIFAR-10 / CIFAR-100 adapters."""
 from __future__ import annotations
 
 from typing import Dict
@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 
 from src.data.adapters.base import DatasetAdapter
 from src.data.adapters.cifar10 import CIFAR10Adapter
+from src.data.adapters.cifar100 import CIFAR100Adapter
 from src.data.adapters.mnist import MNISTAdapter
 
 
@@ -16,6 +17,16 @@ def _build_adapter(cfg) -> DatasetAdapter:
     root = cfg.data.root
     if name == "cifar10":
         return CIFAR10Adapter(
+            root=root,
+            val_from_train=bool(cfg.data.val_from_train),
+            val_split=float(cfg.data.val_split),
+            seed=int(cfg.seed),
+            normalize=bool(cfg.data.normalize),
+            random_rotation_degrees=float(cfg.data.random_rotation_degrees),
+            val_use_train_transform=bool(cfg.data.val_use_train_transform),
+        )
+    if name == "cifar100":
+        return CIFAR100Adapter(
             root=root,
             val_from_train=bool(cfg.data.val_from_train),
             val_split=float(cfg.data.val_split),
@@ -35,7 +46,7 @@ def _build_adapter(cfg) -> DatasetAdapter:
             grayscale_to_rgb=bool(cfg.data.grayscale_to_rgb),
             random_crop_padding=int(cfg.data.random_crop_padding),
         )
-    raise ValueError(f"Unsupported data.id: {cfg.data.id}. Supported: mnist, cifar10")
+    raise ValueError(f"Unsupported data.id: {cfg.data.id}. Supported: mnist, cifar10, cifar100")
 
 
 class FIEDLDataModule(pl.LightningDataModule):

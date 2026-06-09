@@ -1,0 +1,31 @@
+# FI-EDL gate-normalization sweep — base CIFAR-10 protocol (Stage 1, 2 seeds).
+# The driver scripts/run_fiedl_sweep.sh calls this preset once per config,
+# appending loss.{signal_norm,info_type,gamma} and experiment.method_variant
+# overrides on the CLI (CLI overrides win over preset overrides in run.py).
+#
+# Protocol matches main_cifar10.yaml: VGG-16, 200 epochs, lr=5e-4, val/acc ES.
+# Diagnosis behind this sweep: with signal_norm=none the gate
+# lambda=beta*exp(-gamma*trace) saturates to ~5e-7 (trace≈14.5), so FI-EDL
+# trains with essentially no KL regularisation. See memory
+# project_fiedl_controller_saturated.
+methods: [fi_edl]
+seeds: [0, 1]
+run_eval: true
+overrides:
+  - dataset=cifar10
+  - backbone=vgg16
+  - trainer.max_epochs=200
+  - data.batch_size=64
+  - data.val_from_train=true
+  - data.val_split=0.05
+  - optimizer.lr=0.0005
+  - trainer.precision=32-true
+  - trainer.early_stopping=true
+  - trainer.early_stopping_monitor=val/acc
+  - trainer.early_stopping_mode=max
+  - trainer.early_stopping_patience=20
+  - eval.scores=[maxp,alpha0,vacuity,fisher]
+  - eval.confidence_scores=[maxp,maxalpha,alpha0,fisher]
+  - logging.wandb.enabled=true
+  - logging.wandb.project=FI-EDL-CIFAR10-sweep
+  - logging.local_dir=runs/cifar10

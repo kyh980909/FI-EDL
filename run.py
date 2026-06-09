@@ -143,13 +143,15 @@ def main() -> None:
     seeds = preset["seeds"]
     preset_overrides = list(preset.get("overrides", []))
     merged = preset_overrides + list(args.overrides)
+    # Respect `logging.local_dir` override so SKIP can find existing runs.
+    local_dir = _override_value(merged, "logging.local_dir") or "runs"
 
     # Train (skip seeds that already have a completed training run whose
     # dataset/backbone match this preset).
     for method in methods:
         suffix = _run_suffix(merged, method)
         for seed in seeds:
-            run_root = Path("runs") / method / f"seed_{seed}"
+            run_root = Path(local_dir) / method / f"seed_{seed}"
             if _find_latest_train_summary(run_root, suffix) is not None:
                 print(f"[SKIP train] {method} seed={seed} (checkpoint exists)")
                 continue
@@ -166,7 +168,7 @@ def main() -> None:
     for method in methods:
         suffix = _run_suffix(merged, method)
         for seed in seeds:
-            run_root = Path("runs") / method / f"seed_{seed}"
+            run_root = Path(local_dir) / method / f"seed_{seed}"
             if not run_root.exists():
                 print(f"[SKIP eval] {method} seed={seed} (no run dir)")
                 continue
